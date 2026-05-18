@@ -37,3 +37,25 @@ export async function getMovieVideos(id) {
 export async function getTrendingMovies(page = 1) {
   return apiFetch(`${BASE}/trending/movie/week?api_key=${KEY}&page=${page}`)
 }
+
+export async function getMovieCredits(id) {
+  return apiFetch(`${BASE}/movie/${id}/credits?api_key=${KEY}`)
+}
+
+export async function getPersonDetails(id) {
+  return apiFetch(`${BASE}/person/${id}?api_key=${KEY}`)
+}
+
+export async function getPersonMovieCredits(id) {
+  return apiFetch(`${BASE}/person/${id}/movie_credits?api_key=${KEY}`)
+}
+
+export async function getGenres() {
+  return apiFetch(`${BASE}/genre/movie/list?api_key=${KEY}`)
+}
+
+export async function discoverMovies(genreId, page = 1) {
+  return apiFetch(
+    `${BASE}/discover/movie?api_key=${KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}&include_adult=false`
+  )
+}

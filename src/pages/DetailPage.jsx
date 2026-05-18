@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getMovieDetails, getWatchProviders, getMovieVideos, IMG_BASE } from '../lib/tmdb.js'
+import { getMovieDetails, getWatchProviders, getMovieVideos, getMovieCredits, IMG_BASE } from '../lib/tmdb.js'
 import ProviderCard from '../components/ProviderCard.jsx'
 import Toggle from '../components/Toggle.jsx'
 import TrailerModal from '../components/TrailerModal.jsx'
+import { Link } from 'react-router-dom'
 
 const COUNTRY_NAMES = {
   AD: 'Andorra', AE: 'UAE', AG: 'Antigua', AL: 'Albania', AO: 'Angola',
@@ -94,6 +95,7 @@ export default function DetailPage() {
   const [providers, setProviders] = useState([])
   const [trailer, setTrailer] = useState(null)
   const [showTrailer, setShowTrailer] = useState(false)
+  const [credits, setCredits] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeType, setActiveType] = useState('flatrate')
@@ -117,9 +119,10 @@ export default function DetailPage() {
     setError(null)
     setTrailer(null)
     setShowTrailer(false)
+    setCredits(null)
 
-    Promise.all([getMovieDetails(id), getWatchProviders(id), getMovieVideos(id)])
-      .then(([movieData, providerData, videoData]) => {
+    Promise.all([getMovieDetails(id), getWatchProviders(id), getMovieVideos(id), getMovieCredits(id)])
+      .then(([movieData, providerData, videoData, creditsData]) => {
         setMovie(movieData)
         const results = providerData.results || {}
         setProviders(transformProviders(results))
@@ -129,6 +132,7 @@ export default function DetailPage() {
           videos.find(v => v.type === 'Trailer' && v.site === 'YouTube') ||
           videos.find(v => v.site === 'YouTube')
         setTrailer(pick || null)
+        setCredits(creditsData)
       })
       .catch((err) => setError(err.message || 'Failed to load movie data.'))
       .finally(() => setLoading(false))
@@ -248,6 +252,68 @@ export default function DetailPage() {
       {showTrailer && trailer && (
         <TrailerModal trailerKey={trailer.key} onClose={() => setShowTrailer(false)} />
       )}
+
+      {/* Credits section */}
+      {credits && (() => {
+        const director = credits.crew?.find(c => c.job === 'Director')
+        const writers = credits.crew?.filter(c => c.job === 'Screenplay' || c.job === 'Writer').slice(0, 2)
+        const cast = credits.cast?.slice(0, 12) || []
+        return (
+          <div className="px-4 sm:px-8 pt-5 pb-2 max-w-7xl mx-auto border-b border-white/5">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 mb-4 text-sm">
+              {director && (
+                <span className="text-gray-500">
+                  Directed by{' '}
+                  <Link to={`/person/${director.id}`} className="text-white hover:text-[#E50914] transition-colors font-medium">
+                    {director.name}
+                  </Link>
+                </span>
+              )}
+              {writers?.length > 0 && (
+                <span className="text-gray-500">
+                  Written by{' '}
+                  {writers.map((w, i) => (
+                    <span key={w.id}>
+                      <Link to={`/person/${w.id}`} className="text-white hover:text-[#E50914] transition-colors font-medium">
+                        {w.name}
+                      </Link>
+                      {i < writers.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
+            {cast.length > 0 && (
+              <div
+                className="flex gap-4 overflow-x-auto pb-4"
+                style={{ scrollbarWidth: 'thin' }}
+              >
+                {cast.map(person => (
+                  <Link
+                    key={`${person.id}-${person.cast_id}`}
+                    to={`/person/${person.id}`}
+                    className="flex-shrink-0 w-16 text-center group"
+                  >
+                    {person.profile_path ? (
+                      <img
+                        src={`${IMG_BASE}/w185${person.profile_path}`}
+                        alt={person.name}
+                        className="w-16 h-16 rounded-full object-cover object-top mx-auto group-hover:ring-2 ring-[#E50914] transition-all duration-200"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-[#2a2a2a] mx-auto flex items-center justify-center text-gray-600 text-2xl group-hover:ring-2 ring-[#E50914] transition-all duration-200">
+                        ?
+                      </div>
+                    )}
+                    <p className="text-white text-xs mt-2 leading-tight line-clamp-2 group-hover:text-[#E50914] transition-colors">{person.name}</p>
+                    <p className="text-gray-600 text-xs mt-0.5 line-clamp-1">{person.character}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Providers section */}
       <div className="px-4 sm:px-8 pb-16 max-w-7xl mx-auto">
