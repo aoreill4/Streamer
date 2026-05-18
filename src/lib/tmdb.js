@@ -3,23 +3,25 @@ const KEY = import.meta.env.VITE_TMDB_API_KEY
 
 export const IMG_BASE = 'https://image.tmdb.org/t/p'
 
-export async function searchMovies(query, page = 1) {
-  const url = `${BASE}/search/movie?api_key=${KEY}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`
+async function apiFetch(url) {
   const res = await fetch(url)
-  if (!res.ok) throw new Error('Search failed')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.status_message || `HTTP ${res.status}`)
+  }
   return res.json()
+}
+
+export async function searchMovies(query, page = 1) {
+  return apiFetch(
+    `${BASE}/search/movie?api_key=${KEY}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`
+  )
 }
 
 export async function getMovieDetails(id) {
-  const url = `${BASE}/movie/${id}?api_key=${KEY}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Movie fetch failed')
-  return res.json()
+  return apiFetch(`${BASE}/movie/${id}?api_key=${KEY}`)
 }
 
 export async function getWatchProviders(id) {
-  const url = `${BASE}/movie/${id}/watch/providers?api_key=${KEY}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Provider fetch failed')
-  return res.json()
+  return apiFetch(`${BASE}/movie/${id}/watch/providers?api_key=${KEY}`)
 }
