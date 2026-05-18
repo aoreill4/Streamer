@@ -11,14 +11,14 @@ function flagEmoji(code) {
 
 const VISIBLE_LIMIT = 15
 
-export default function ProviderCard({ name, logoPath, countries }) {
+export default function ProviderCard({ name, logoPath, countries, pinned, onTogglePin }) {
   const [showAll, setShowAll] = useState(false)
 
   const visible = showAll ? countries : countries.slice(0, VISIBLE_LIMIT)
   const remaining = countries.length - VISIBLE_LIMIT
 
   return (
-    <div className="bg-[#1f1f1f] rounded-xl p-4 flex flex-col gap-3">
+    <div className={`bg-[#1f1f1f] rounded-xl p-4 flex flex-col gap-3 border transition-colors duration-200 ${pinned ? 'border-[#E50914]/40' : 'border-transparent'}`}>
       <div className="flex items-center gap-3">
         {logoPath ? (
           <img
@@ -29,9 +29,18 @@ export default function ProviderCard({ name, logoPath, countries }) {
         ) : (
           <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex-shrink-0" />
         )}
-        <span className="text-white font-semibold text-sm leading-tight">
+        <span className="text-white font-semibold text-sm leading-tight flex-1">
           {name}
         </span>
+        {onTogglePin && (
+          <button
+            onClick={onTogglePin}
+            title={pinned ? 'Remove from My Services' : 'Add to My Services'}
+            className={`text-base transition-colors flex-shrink-0 ${pinned ? 'text-[#E50914]' : 'text-gray-600 hover:text-gray-300'}`}
+          >
+            {pinned ? '★' : '☆'}
+          </button>
+        )}
       </div>
 
       {countries.length > 0 && (

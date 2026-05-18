@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getMovieDetails, getWatchProviders, IMG_BASE } from '../lib/tmdb.js'
+import { getMovieDetails, getWatchProviders, getMovieVideos, IMG_BASE } from '../lib/tmdb.js'
 import ProviderCard from '../components/ProviderCard.jsx'
 import Toggle from '../components/Toggle.jsx'
+import TrailerModal from '../components/TrailerModal.jsx'
 
 const COUNTRY_NAMES = {
   AD: 'Andorra', AE: 'UAE', AG: 'Antigua', AL: 'Albania', AO: 'Angola',
@@ -91,27 +92,52 @@ export default function DetailPage() {
 
   const [movie, setMovie] = useState(null)
   const [providers, setProviders] = useState([])
+  const [trailer, setTrailer] = useState(null)
+  const [showTrailer, setShowTrailer] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeType, setActiveType] = useState('flatrate')
+  const [myServices, setMyServices] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('myServices') || '[]') } catch { return [] }
+  })
+  const [filterMine, setFilterMine] = useState(false)
+
+  function toggleMyService(providerId) {
+    setMyServices(prev => {
+      const next = prev.includes(providerId)
+        ? prev.filter(id => id !== providerId)
+        : [...prev, providerId]
+      localStorage.setItem('myServices', JSON.stringify(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setTrailer(null)
+    setShowTrailer(false)
 
-    Promise.all([getMovieDetails(id), getWatchProviders(id)])
-      .then(([movieData, providerData]) => {
+    Promise.all([getMovieDetails(id), getWatchProviders(id), getMovieVideos(id)])
+      .then(([movieData, providerData, videoData]) => {
         setMovie(movieData)
         const results = providerData.results || {}
         setProviders(transformProviders(results))
+        const videos = videoData.results || []
+        const pick =
+          videos.find(v => v.type === 'Trailer' && v.site === 'YouTube' && v.official) ||
+          videos.find(v => v.type === 'Trailer' && v.site === 'YouTube') ||
+          videos.find(v => v.site === 'YouTube')
+        setTrailer(pick || null)
       })
       .catch((err) => setError(err.message || 'Failed to load movie data.'))
       .finally(() => setLoading(false))
   }, [id])
 
-  const visibleProviders = providers.filter(
-    (p) => p.countries[activeType].length > 0
-  )
+  const activeProviders = providers.filter(p => p.countries[activeType].length > 0)
+  const visibleProviders = filterMine && myServices.length > 0
+    ? activeProviders.filter(p => myServices.includes(p.provider_id))
+    : activeProviders
 
   if (loading) {
     return (
@@ -206,21 +232,51 @@ export default function DetailPage() {
                   {movie.overview}
                 </p>
               )}
+              {trailer && (
+                <button
+                  onClick={() => setShowTrailer(true)}
+                  className="mt-3 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200"
+                >
+                  <span className="text-[#E50914]">▶</span> Watch Trailer
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
+      {showTrailer && trailer && (
+        <TrailerModal trailerKey={trailer.key} onClose={() => setShowTrailer(false)} />
+      )}
+
       {/* Providers section */}
       <div className="px-4 sm:px-8 pb-16 max-w-7xl mx-auto">
-        <div className="mt-6 flex items-center gap-4 flex-wrap">
+        <div className="mt-6 flex items-center gap-3 flex-wrap">
           <Toggle options={TOGGLE_OPTIONS} value={activeType} onChange={setActiveType} />
+          {activeProviders.length > 0 && (
+            <button
+              onClick={() => setFilterMine(f => !f)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors duration-200 ${
+                filterMine
+                  ? 'bg-[#E50914] border-[#E50914] text-white'
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/40'
+              }`}
+            >
+              {filterMine ? '★ My Services' : '☆ My Services'}
+            </button>
+          )}
           {providers.length > 0 && (
-            <span className="text-gray-500 text-sm">
-              {visibleProviders.length} service{visibleProviders.length !== 1 ? 's' : ''} available
+            <span className="text-gray-500 text-sm ml-auto">
+              {visibleProviders.length} service{visibleProviders.length !== 1 ? 's' : ''}
+              {filterMine && myServices.length > 0 ? ' (filtered)' : ' available'}
             </span>
           )}
         </div>
+        {filterMine && myServices.length === 0 && (
+          <p className="mt-2 text-xs text-gray-600">
+            Pin services by clicking the ★ on any card below, then enable the filter.
+          </p>
+        )}
 
         {providers.length === 0 ? (
           <div className="mt-12 text-center py-16 text-gray-500">
@@ -230,9 +286,13 @@ export default function DetailPage() {
         ) : visibleProviders.length === 0 ? (
           <div className="mt-12 text-center py-16 text-gray-500">
             <p className="text-lg">
-              No {activeType === 'flatrate' ? 'subscription streaming' : activeType} options found.
+              {filterMine
+                ? 'None of your pinned services have this movie.'
+                : `No ${activeType === 'flatrate' ? 'subscription streaming' : activeType} options found.`}
             </p>
-            <p className="text-sm mt-2">Try switching to Rent or Buy above.</p>
+            <p className="text-sm mt-2">
+              {filterMine ? 'Turn off the filter to see all available services.' : 'Try switching to Rent or Buy above.'}
+            </p>
           </div>
         ) : (
           <div
@@ -245,6 +305,8 @@ export default function DetailPage() {
                 name={p.name}
                 logoPath={p.logo_path}
                 countries={p.countries[activeType]}
+                pinned={myServices.includes(p.provider_id)}
+                onTogglePin={() => toggleMyService(p.provider_id)}
               />
             ))}
           </div>

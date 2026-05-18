@@ -29,3 +29,11 @@ export async function getWatchProviders(id) {
 export async function getPopularMovies(page = 1) {
   return apiFetch(`${BASE}/movie/popular?api_key=${KEY}&page=${page}`)
 }
+
+export async function getMovieVideos(id) {
+  return apiFetch(`${BASE}/movie/${id}/videos?api_key=${KEY}`)
+}
+
+export async function getTrendingMovies(page = 1) {
+  return apiFetch(`${BASE}/trending/movie/week?api_key=${KEY}&page=${page}`)
+}
