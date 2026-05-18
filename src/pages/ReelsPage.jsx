@@ -2,62 +2,55 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { getTrendingMovies, getMovieVideos, IMG_BASE } from '../lib/tmdb.js'
 
-function ReelCard({ reel, isActive, muted, onMovieClick }) {
+function ytCmd(iframe, func, args = []) {
+  iframe?.contentWindow?.postMessage(
+    JSON.stringify({ event: 'command', func, args }),
+    '*'
+  )
+}
+
+function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
   const { movie, trailerKey } = reel
   const year = movie.release_date?.slice(0, 4)
   const rating = movie.vote_average > 0 ? movie.vote_average.toFixed(1) : null
-
   const backdropUrl = movie.backdrop_path
     ? `${IMG_BASE}/w1280${movie.backdrop_path}`
-    : movie.poster_path
-    ? `${IMG_BASE}/w500${movie.poster_path}`
-    : null
+    : movie.poster_path ? `${IMG_BASE}/w500${movie.poster_path}` : null
 
-  // Key changes force iframe reload when mute state or active state changes
-  const iframeKey = `${trailerKey}-${muted}-${isActive}`
-  const iframeSrc = `https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${muted ? 1 : 0}&controls=1&rel=0&modestbranding=1&playsinline=1`
+  // Stable src — never changes. Playback controlled via postMessage.
+  const src = `https://www.youtube.com/embed/${trailerKey}?enablejsapi=1&autoplay=0&mute=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${trailerKey}&playsinline=1`
 
   return (
-    <div className="snap-start h-screen w-full relative bg-black flex items-center justify-center overflow-hidden flex-shrink-0">
-      {isActive ? (
+    <div className="snap-start h-screen w-full relative bg-black overflow-hidden flex-shrink-0">
+      {backdropUrl && (
+        <img
+          src={backdropUrl}
+          alt={movie.title}
+          className="absolute inset-0 w-full h-full object-cover opacity-30"
+        />
+      )}
+
+      {mounted && (
         <iframe
-          key={iframeKey}
-          src={iframeSrc}
+          ref={iframeRef}
+          src={src}
           className="absolute inset-0 w-full h-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           title={movie.title}
         />
-      ) : (
-        backdropUrl && (
-          <img
-            src={backdropUrl}
-            alt={movie.title}
-            className="absolute inset-0 w-full h-full object-cover opacity-30"
-          />
-        )
       )}
 
-      {/* gradient overlay — pointer-events-none so clicks pass through to iframe controls */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.4) 100%)',
-        }}
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.45) 100%)' }}
       />
 
-      {/* Movie info — bottom left */}
-      <div className="absolute bottom-10 left-4 right-20 z-10">
+      <div className="absolute bottom-10 left-4 right-16 z-10">
         <h2 className="text-white text-xl font-bold leading-tight drop-shadow-lg">{movie.title}</h2>
         <div className="flex items-center gap-2 mt-1 text-gray-300 text-sm">
           {year && <span>{year}</span>}
-          {rating && (
-            <>
-              <span className="text-gray-500">·</span>
-              <span>★ {rating}</span>
-            </>
-          )}
+          {rating && <><span className="text-gray-500">·</span><span>★ {rating}</span></>}
         </div>
         {movie.overview && (
           <p className="mt-1.5 text-gray-400 text-xs leading-relaxed line-clamp-2 max-w-sm">
@@ -79,24 +72,23 @@ export default function ReelsPage() {
   const [reels, setReels] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(false)
   const navigate = useNavigate()
-  const containerRef = useRef(null)
   const itemRefs = useRef([])
+  const iframeRefs = useRef({})
+  // Refs mirror state so the message listener always sees current values
+  const activeIndexRef = useRef(0)
+  const mutedRef = useRef(false)
+
+  useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
+  useEffect(() => { mutedRef.current = muted }, [muted])
 
   useEffect(() => {
     async function load() {
       try {
-        const [page1, page2] = await Promise.all([
-          getTrendingMovies(1),
-          getTrendingMovies(2),
-        ])
-        const movies = [...(page1.results || []), ...(page2.results || [])]
-
-        const videoResults = await Promise.allSettled(
-          movies.map(m => getMovieVideos(m.id))
-        )
-
+        const [p1, p2] = await Promise.all([getTrendingMovies(1), getTrendingMovies(2)])
+        const movies = [...(p1.results || []), ...(p2.results || [])]
+        const videoResults = await Promise.allSettled(movies.map(m => getMovieVideos(m.id)))
         const reelData = []
         for (let i = 0; i < movies.length; i++) {
           if (videoResults[i].status !== 'fulfilled') continue
@@ -107,10 +99,9 @@ export default function ReelsPage() {
             videos.find(v => v.site === 'YouTube')
           if (pick) reelData.push({ movie: movies[i], trailerKey: pick.key })
         }
-
         setReels(reelData)
       } catch {
-        // silently fail — show empty state
+        // silently fail — empty state shown
       } finally {
         setLoading(false)
       }
@@ -118,16 +109,55 @@ export default function ReelsPage() {
     load()
   }, [])
 
-  // IntersectionObserver to track which reel is centered
+  // YouTube fires onReady when a player initialises — play + unmute the active one immediately
+  useEffect(() => {
+    function onMessage(e) {
+      try {
+        const data = JSON.parse(typeof e.data === 'string' ? e.data : '{}')
+        if (data.event !== 'onReady') return
+        Object.entries(iframeRefs.current).forEach(([idxStr, el]) => {
+          if (!el || el.contentWindow !== e.source) return
+          const i = parseInt(idxStr)
+          if (i === activeIndexRef.current) {
+            ytCmd(el, 'playVideo')
+            ytCmd(el, mutedRef.current ? 'mute' : 'unMute')
+          }
+        })
+      } catch {}
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  // Active index changed — play new, pause others
+  useEffect(() => {
+    Object.entries(iframeRefs.current).forEach(([idxStr, el]) => {
+      if (!el) return
+      const i = parseInt(idxStr)
+      if (i === activeIndex) {
+        ytCmd(el, 'playVideo')
+        ytCmd(el, muted ? 'mute' : 'unMute')
+      } else {
+        ytCmd(el, 'pauseVideo')
+        ytCmd(el, 'mute')
+      }
+    })
+  }, [activeIndex]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mute toggle — only affects the active player
+  useEffect(() => {
+    const el = iframeRefs.current[activeIndex]
+    if (el) ytCmd(el, muted ? 'mute' : 'unMute')
+  }, [muted, activeIndex])
+
+  // IntersectionObserver — high threshold so it only fires once snapped
   useEffect(() => {
     if (reels.length === 0) return
     const observers = []
     itemRefs.current.forEach((el, i) => {
       if (!el) return
       const obs = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) setActiveIndex(i)
-        },
+        ([entry]) => { if (entry.isIntersecting && entry.intersectionRatio >= 0.6) setActiveIndex(i) },
         { threshold: 0.6 }
       )
       obs.observe(el)
@@ -136,19 +166,15 @@ export default function ReelsPage() {
     return () => observers.forEach(o => o.disconnect())
   }, [reels])
 
-  const handleMovieClick = useCallback((id) => {
-    navigate(`/movie/${id}`)
-  }, [navigate])
+  const handleMovieClick = useCallback((id) => navigate(`/movie/${id}`), [navigate])
 
   return (
     <div className="h-screen bg-black flex flex-col overflow-hidden">
-      {/* Top nav */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-8"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)' }}
+      <div
+        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-10"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)' }}
       >
-        <Link to="/" className="text-white/80 hover:text-white text-sm transition-colors flex items-center gap-1">
-          ← Back
-        </Link>
+        <Link to="/" className="text-white/80 hover:text-white text-sm transition-colors">← Back</Link>
         <span className="text-white font-bold text-sm tracking-widest uppercase">Reels</span>
         <button
           onClick={() => setMuted(m => !m)}
@@ -174,9 +200,7 @@ export default function ReelsPage() {
 
       {!loading && reels.length > 0 && (
         <>
-          {/* Scroll container */}
           <div
-            ref={containerRef}
             className="flex-1 overflow-y-scroll"
             style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
           >
@@ -188,23 +212,20 @@ export default function ReelsPage() {
               >
                 <ReelCard
                   reel={reel}
-                  isActive={i === activeIndex}
-                  muted={muted}
+                  iframeRef={el => { iframeRefs.current[i] = el }}
+                  mounted={Math.abs(i - activeIndex) <= 1}
                   onMovieClick={handleMovieClick}
                 />
               </div>
             ))}
           </div>
 
-          {/* Progress dots — right side */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5">
             {reels.map((_, i) => (
               <div
                 key={i}
                 className={`rounded-full transition-all duration-300 ${
-                  i === activeIndex
-                    ? 'bg-white w-1.5 h-4'
-                    : 'bg-white/30 w-1.5 h-1.5'
+                  i === activeIndex ? 'bg-white w-1.5 h-4' : 'bg-white/30 w-1.5 h-1.5'
                 }`}
               />
             ))}
