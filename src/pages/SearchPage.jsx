@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar.jsx'
 import MovieCard from '../components/MovieCard.jsx'
-import { searchMovies } from '../lib/tmdb.js'
+import { searchMovies, getPopularMovies } from '../lib/tmdb.js'
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
@@ -15,6 +15,8 @@ export default function SearchPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(0)
   const [hasSearched, setHasSearched] = useState(false)
+  const [popular, setPopular] = useState([])
+  const [popularLoading, setPopularLoading] = useState(false)
 
   const runSearch = useCallback(async (q, p = 1) => {
     if (!q.trim()) return
@@ -39,6 +41,11 @@ export default function SearchPage() {
     if (q) {
       setQuery(q)
       runSearch(q, 1)
+    } else {
+      setPopularLoading(true)
+      getPopularMovies().then(data => {
+        setPopular(data.results || [])
+      }).catch(() => {}).finally(() => setPopularLoading(false))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -97,13 +104,24 @@ export default function SearchPage() {
         )}
 
         {!loading && !hasSearched && !error && (
-          <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
-            <span className="text-6xl">🎬</span>
-            <h1 className="text-3xl font-bold text-white">Find where to stream any movie</h1>
-            <p className="text-gray-400 text-lg max-w-md">
-              Search for any film and discover which streaming platforms have it available worldwide.
-            </p>
-          </div>
+          <>
+            <div className="mb-6">
+              <h2 className="text-white text-lg font-semibold mb-1">Popular right now</h2>
+              <p className="text-gray-500 text-sm">Click any movie to see where it streams</p>
+            </div>
+            {popularLoading && (
+              <div className="flex justify-center py-24">
+                <div className="w-10 h-10 border-4 border-gray-700 border-t-[#E50914] rounded-full animate-spin" />
+              </div>
+            )}
+            {!popularLoading && popular.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {popular.map((movie) => (
+                  <MovieCard key={movie.id} movie={movie} />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {!loading && hasSearched && results.length === 0 && !error && (

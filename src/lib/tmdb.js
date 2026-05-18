@@ -25,3 +25,7 @@ export async function getMovieDetails(id) {
 export async function getWatchProviders(id) {
   return apiFetch(`${BASE}/movie/${id}/watch/providers?api_key=${KEY}`)
 }
+
+export async function getPopularMovies(page = 1) {
+  return apiFetch(`${BASE}/movie/popular?api_key=${KEY}&page=${page}`)
+}
