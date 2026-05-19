@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar.jsx'
 import MovieCard from '../components/MovieCard.jsx'
 import { searchMovies, getPopularMovies, getGenres, discoverMovies } from '../lib/tmdb.js'
@@ -105,29 +105,13 @@ export default function SearchPage() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[#141414]/90 backdrop-blur border-b border-white/5 px-4 sm:px-8 py-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-4">
-          <div className="flex items-center gap-4 flex-shrink-0">
-            <a
-              href="/"
-              className="text-[#E50914] text-2xl font-black tracking-tight hover:opacity-90 transition-opacity"
-            >
-              Streamer
-            </a>
-            <Link
-              to="/reels"
-              className="text-gray-400 hover:text-white text-sm font-medium transition-colors flex items-center gap-1"
-            >
-              ▶ Reels
-            </Link>
-          </div>
-          <div className="w-full sm:flex-1 flex justify-center">
-            <SearchBar
-              value={query}
-              onChange={setQuery}
-              onSearch={handleSearch}
-              loading={loading}
-            />
-          </div>
+        <div className="max-w-7xl mx-auto">
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            onSearch={handleSearch}
+            loading={loading}
+          />
         </div>
 
         {/* Genre chips */}

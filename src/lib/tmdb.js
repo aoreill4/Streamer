@@ -59,3 +59,11 @@ export async function discoverMovies(genreId, page = 1) {
     `${BASE}/discover/movie?api_key=${KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}&include_adult=false`
   )
 }
+
+export async function getMovieRecommendations(id) {
+  return apiFetch(`${BASE}/movie/${id}/recommendations?api_key=${KEY}`)
+}
+
+export async function getWatchProvidersList(region = 'US') {
+  return apiFetch(`${BASE}/watch/providers/movie?api_key=${KEY}&watch_region=${region}&language=en-US`)
+}

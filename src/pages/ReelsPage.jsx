@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { getTrendingMovies, getMovieVideos, IMG_BASE } from '../lib/tmdb.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function ytCmd(iframe, func, args = []) {
   iframe?.contentWindow?.postMessage(
@@ -11,11 +12,21 @@ function ytCmd(iframe, func, args = []) {
 
 function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
   const { movie, trailerKey } = reel
+  const { user, isLiked, likeMovie, unlikeMovie, isInWatchlist, addToWatchlist, removeFromWatchlist } = useAuth()
+  const navigate = useNavigate()
   const year = movie.release_date?.slice(0, 4)
   const rating = movie.vote_average > 0 ? movie.vote_average.toFixed(1) : null
   const backdropUrl = movie.backdrop_path
     ? `${IMG_BASE}/w1280${movie.backdrop_path}`
     : movie.poster_path ? `${IMG_BASE}/w500${movie.poster_path}` : null
+
+  const liked = isLiked(movie.id)
+  const saved = isInWatchlist(movie.id)
+
+  function requireAuth(fn) {
+    if (!user) { navigate('/auth'); return }
+    fn()
+  }
 
   // Stable src — never changes. Playback controlled via postMessage.
   const src = `https://www.youtube.com/embed/${trailerKey}?enablejsapi=1&autoplay=0&mute=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${trailerKey}&playsinline=1`
@@ -23,11 +34,7 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
   return (
     <div className="snap-start h-screen w-full relative bg-black overflow-hidden flex-shrink-0">
       {backdropUrl && (
-        <img
-          src={backdropUrl}
-          alt={movie.title}
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
-        />
+        <img src={backdropUrl} alt={movie.title} className="absolute inset-0 w-full h-full object-cover opacity-30" />
       )}
 
       {mounted && (
@@ -46,16 +53,43 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
         style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.45) 100%)' }}
       />
 
-      <div className="absolute bottom-10 left-4 right-16 z-10">
+      {/* Action buttons — right side */}
+      <div className="absolute right-4 bottom-24 z-10 flex flex-col items-center gap-5">
+        {/* Like */}
+        <button
+          onClick={() => requireAuth(() => liked ? unlikeMovie(movie.id) : likeMovie(movie))}
+          className="flex flex-col items-center gap-1 group"
+        >
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur transition-all duration-200 ${liked ? 'bg-[#E50914]/20' : 'bg-black/40 hover:bg-black/60'}`}>
+            <svg className={`w-6 h-6 transition-colors ${liked ? 'text-[#E50914]' : 'text-white'}`} viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </div>
+          <span className="text-white text-[10px] font-medium drop-shadow">{liked ? 'Liked' : 'Like'}</span>
+        </button>
+
+        {/* Watchlist */}
+        <button
+          onClick={() => requireAuth(() => saved ? removeFromWatchlist(movie.id) : addToWatchlist(movie))}
+          className="flex flex-col items-center gap-1 group"
+        >
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur transition-all duration-200 ${saved ? 'bg-[#E50914]/20' : 'bg-black/40 hover:bg-black/60'}`}>
+            <svg className={`w-6 h-6 transition-colors ${saved ? 'text-[#E50914]' : 'text-white'}`} viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <span className="text-white text-[10px] font-medium drop-shadow">{saved ? 'Saved' : 'Save'}</span>
+        </button>
+      </div>
+
+      <div className="absolute bottom-20 md:bottom-10 left-4 right-20 z-10">
         <h2 className="text-white text-xl font-bold leading-tight drop-shadow-lg">{movie.title}</h2>
         <div className="flex items-center gap-2 mt-1 text-gray-300 text-sm">
           {year && <span>{year}</span>}
           {rating && <><span className="text-gray-500">·</span><span>★ {rating}</span></>}
         </div>
         {movie.overview && (
-          <p className="mt-1.5 text-gray-400 text-xs leading-relaxed line-clamp-2 max-w-sm">
-            {movie.overview}
-          </p>
+          <p className="mt-1.5 text-gray-400 text-xs leading-relaxed line-clamp-2 max-w-sm">{movie.overview}</p>
         )}
         <button
           onClick={() => onMovieClick(movie.id)}
@@ -169,9 +203,9 @@ export default function ReelsPage() {
   const handleMovieClick = useCallback((id) => navigate(`/movie/${id}`), [navigate])
 
   return (
-    <div className="h-screen bg-black flex flex-col overflow-hidden">
+    <div className="h-screen bg-black flex flex-col overflow-hidden md:ml-[220px]">
       <div
-        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-10"
+        className="absolute top-0 md:left-[220px] left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-10"
         style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)' }}
       >
         <Link to="/" className="text-white/80 hover:text-white text-sm transition-colors">← Back</Link>
