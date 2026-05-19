@@ -185,11 +185,10 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    getWatchProvidersList('US')
+    getWatchProvidersList()
       .then(data => {
         const sorted = (data.results || [])
           .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
-          .slice(0, 20)
         setProviders(sorted)
       })
       .catch(() => {})
@@ -225,7 +224,7 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
             <div className="w-6 h-6 border-2 border-gray-600 border-t-[#E50914] rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
             {providers.map(p => (
               <button
                 key={p.provider_id}

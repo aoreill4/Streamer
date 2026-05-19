@@ -187,11 +187,10 @@ function SettingsSection() {
   const [pwSuccess, setPwSuccess] = useState('')
 
   useEffect(() => {
-    getWatchProvidersList('US')
+    getWatchProvidersList()
       .then(data => {
         const sorted = (data.results || [])
           .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
-          .slice(0, 20)
         setProviders(sorted)
       })
       .catch(() => {})
@@ -258,7 +257,7 @@ function SettingsSection() {
             <div className="w-6 h-6 border-2 border-gray-600 border-t-[#E50914] rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4">
+          <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4 max-h-72 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
             {providers.map(p => (
               <ProviderSelectCard
                 key={p.provider_id}

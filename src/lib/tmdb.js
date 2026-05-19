@@ -64,6 +64,6 @@ export async function getMovieRecommendations(id) {
   return apiFetch(`${BASE}/movie/${id}/recommendations?api_key=${KEY}`)
 }
 
-export async function getWatchProvidersList(region = 'US') {
-  return apiFetch(`${BASE}/watch/providers/movie?api_key=${KEY}&watch_region=${region}&language=en-US`)
+export async function getWatchProvidersList() {
+  return apiFetch(`${BASE}/watch/providers/movie?api_key=${KEY}&language=en-US`)
 }
