@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getMovieDetails, getWatchProviders, getMovieVideos, getMovieCredits, IMG_BASE } from '../lib/tmdb.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import ProviderCard from '../components/ProviderCard.jsx'
 import Toggle from '../components/Toggle.jsx'
 import TrailerModal from '../components/TrailerModal.jsx'
@@ -48,8 +49,7 @@ const TOGGLE_OPTIONS = [
 ]
 
 function transformProviders(results) {
-  // results: { "US": { flatrate: [...], rent: [...], buy: [...] }, ... }
-  const map = {} // keyed by provider_id
+  const map = {}
 
   for (const [countryCode, types] of Object.entries(results)) {
     const countryName = COUNTRY_NAMES[countryCode] || countryCode
@@ -70,7 +70,6 @@ function transformProviders(results) {
     }
   }
 
-  // Sort each country list alphabetically by name
   for (const entry of Object.values(map)) {
     for (const type of ['flatrate', 'rent', 'buy']) {
       entry.countries[type].sort((a, b) => a.name.localeCompare(b.name))
@@ -90,6 +89,7 @@ function runtime(minutes) {
 export default function DetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [movie, setMovie] = useState(null)
   const [providers, setProviders] = useState([])
@@ -99,20 +99,6 @@ export default function DetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeType, setActiveType] = useState('flatrate')
-  const [myServices, setMyServices] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('myServices') || '[]') } catch { return [] }
-  })
-  const [filterMine, setFilterMine] = useState(false)
-
-  function toggleMyService(providerId) {
-    setMyServices(prev => {
-      const next = prev.includes(providerId)
-        ? prev.filter(id => id !== providerId)
-        : [...prev, providerId]
-      localStorage.setItem('myServices', JSON.stringify(next))
-      return next
-    })
-  }
 
   useEffect(() => {
     setLoading(true)
@@ -138,10 +124,30 @@ export default function DetailPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  const activeProviders = providers.filter(p => p.countries[activeType].length > 0)
-  const visibleProviders = filterMine && myServices.length > 0
-    ? activeProviders.filter(p => myServices.includes(p.provider_id))
-    : activeProviders
+  const userServices = user?.streamingServices?.length ? user.streamingServices : null
+  const userCountry = user?.country || null
+  const hasVPN = !!user?.hasVPN
+
+  // Filter providers to user's subscribed services (if any), then ensure they have
+  // availability in the active type
+  const visibleProviders = providers
+    .filter(p => {
+      if (userServices && !userServices.includes(p.provider_id)) return false
+      return p.countries[activeType].length > 0
+    })
+
+  // For each provider card, filter the country list to the user's region
+  function getDisplayCountries(provider) {
+    const countries = provider.countries[activeType]
+    if (hasVPN || !userCountry) return countries
+    return countries.filter(c => c.code === userCountry)
+  }
+
+  // A provider passes the country filter if it has at least one visible country
+  const filteredProviders = visibleProviders.filter(p => getDisplayCountries(p).length > 0)
+
+  const isFiltered = !!userServices
+  const allActiveProviders = providers.filter(p => p.countries[activeType].length > 0)
 
   if (loading) {
     return (
@@ -194,7 +200,6 @@ export default function DetailPage() {
         ) : (
           <div className="w-full bg-[#1a1a1a]" style={{ height: '320px' }} />
         )}
-        {/* Gradient overlay */}
         <div
           className="absolute inset-0"
           style={{
@@ -202,7 +207,6 @@ export default function DetailPage() {
               'linear-gradient(to bottom, rgba(20,20,20,0.1) 0%, rgba(20,20,20,0.6) 50%, rgba(20,20,20,1) 100%)',
           }}
         />
-        {/* Movie info overlay */}
         <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-8 pb-6">
           <div className="max-w-7xl mx-auto flex gap-5 items-end">
             {movie?.poster_path && (
@@ -319,28 +323,22 @@ export default function DetailPage() {
       <div className="px-4 sm:px-8 pb-16 max-w-7xl mx-auto">
         <div className="mt-6 flex items-center gap-3 flex-wrap">
           <Toggle options={TOGGLE_OPTIONS} value={activeType} onChange={setActiveType} />
-          {activeProviders.length > 0 && (
-            <button
-              onClick={() => setFilterMine(f => !f)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors duration-200 ${
-                filterMine
-                  ? 'bg-[#E50914] border-[#E50914] text-white'
-                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/40'
-              }`}
-            >
-              {filterMine ? '★ My Services' : '☆ My Services'}
-            </button>
-          )}
           {providers.length > 0 && (
             <span className="text-gray-500 text-sm ml-auto">
-              {visibleProviders.length} service{visibleProviders.length !== 1 ? 's' : ''}
-              {filterMine && myServices.length > 0 ? ' (filtered)' : ' available'}
+              {filteredProviders.length} service{filteredProviders.length !== 1 ? 's' : ''}
+              {isFiltered ? ' on your plan' : ' available'}
             </span>
           )}
         </div>
-        {filterMine && myServices.length === 0 && (
+
+        {/* Filter context note */}
+        {isFiltered && (
           <p className="mt-2 text-xs text-gray-600">
-            Pin services by clicking the ★ on any card below, then enable the filter.
+            Showing your subscribed services
+            {userCountry && !hasVPN ? ` in ${COUNTRY_NAMES[userCountry] || userCountry}` : hasVPN ? ' · all regions (VPN)' : ''}.
+            {allActiveProviders.length > filteredProviders.length && (
+              <> This movie is on {allActiveProviders.length} total service{allActiveProviders.length !== 1 ? 's' : ''} worldwide.</>
+            )}
           </p>
         )}
 
@@ -349,30 +347,35 @@ export default function DetailPage() {
             <p className="text-lg">No streaming data available for this title.</p>
             <p className="text-sm mt-2">TMDB may not have provider information for this movie yet.</p>
           </div>
-        ) : visibleProviders.length === 0 ? (
+        ) : filteredProviders.length === 0 ? (
           <div className="mt-12 text-center py-16 text-gray-500">
             <p className="text-lg">
-              {filterMine
-                ? 'None of your pinned services have this movie.'
+              {isFiltered
+                ? `Not available on your services for ${activeType === 'flatrate' ? 'streaming' : activeType}.`
                 : `No ${activeType === 'flatrate' ? 'subscription streaming' : activeType} options found.`}
             </p>
             <p className="text-sm mt-2">
-              {filterMine ? 'Turn off the filter to see all available services.' : 'Try switching to Rent or Buy above.'}
+              {isFiltered
+                ? 'Try switching to Rent or Buy, or update your services in Profile.'
+                : 'Try switching to Rent or Buy above.'}
             </p>
+            {isFiltered && allActiveProviders.length > 0 && (
+              <p className="text-sm mt-1 text-gray-600">
+                Available on {allActiveProviders.length} other service{allActiveProviders.length !== 1 ? 's' : ''} not in your plan.
+              </p>
+            )}
           </div>
         ) : (
           <div
             className="mt-6 grid gap-4"
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
           >
-            {visibleProviders.map((p) => (
+            {filteredProviders.map((p) => (
               <ProviderCard
                 key={p.provider_id}
                 name={p.name}
                 logoPath={p.logo_path}
-                countries={p.countries[activeType]}
-                pinned={myServices.includes(p.provider_id)}
-                onTogglePin={() => toggleMyService(p.provider_id)}
+                countries={getDisplayCountries(p)}
               />
             ))}
           </div>
