@@ -10,6 +10,19 @@ function ytCmd(iframe, func, args = []) {
   )
 }
 
+// Returns genre IDs sorted by how often they appear in liked movies
+function topGenresFromLikes(likedMovies) {
+  const counts = {}
+  for (const m of likedMovies || []) {
+    for (const gid of m.genre_ids || []) {
+      counts[gid] = (counts[gid] || 0) + 1
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => Number(id))
+}
+
 function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
   const { movie, trailerKey } = reel
   const { user, isLiked, likeMovie, unlikeMovie, isInWatchlist, addToWatchlist, removeFromWatchlist } = useAuth()
@@ -28,7 +41,6 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
     fn()
   }
 
-  // Stable src — never changes. Playback controlled via postMessage.
   const src = `https://www.youtube.com/embed/${trailerKey}?enablejsapi=1&autoplay=0&mute=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${trailerKey}&playsinline=1`
 
   return (
@@ -55,7 +67,6 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
 
       {/* Action buttons — right side */}
       <div className="absolute right-4 bottom-24 z-10 flex flex-col items-center gap-5">
-        {/* Like */}
         <button
           onClick={() => requireAuth(() => liked ? unlikeMovie(movie.id) : likeMovie(movie))}
           className="flex flex-col items-center gap-1 group"
@@ -68,7 +79,6 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
           <span className="text-white text-[10px] font-medium drop-shadow">{liked ? 'Liked' : 'Like'}</span>
         </button>
 
-        {/* Watchlist */}
         <button
           onClick={() => requireAuth(() => saved ? removeFromWatchlist(movie.id) : addToWatchlist(movie))}
           className="flex flex-col items-center gap-1 group"
@@ -105,61 +115,97 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
 export default function ReelsPage() {
   const [reels, setReels] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [muted, setMuted] = useState(false)
   const { user } = useAuth()
   const navigate = useNavigate()
   const itemRefs = useRef([])
   const iframeRefs = useRef({})
-  // Refs mirror state so the message listener always sees current values
   const activeIndexRef = useRef(0)
   const mutedRef = useRef(false)
+  // Fetch state that persists across loads without triggering re-renders
+  const fetchPageRef = useRef(1)
+  const genreRotationRef = useRef(0)
+  const seenIdsRef = useRef(new Set())
+  const isFetchingRef = useRef(false)
 
   useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
   useEffect(() => { mutedRef.current = muted }, [muted])
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const providerIds = user?.streamingServices?.length ? user.streamingServices : null
-        const region = providerIds
-          ? (user?.hasVPN ? undefined : user?.country || undefined)
-          : undefined
+  const fetchReels = useCallback(async (append = false) => {
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
+    if (!append) setLoading(true); else setLoadingMore(true)
 
-        let movies = []
-        if (providerIds) {
-          const [p1, p2] = await Promise.all([
-            discoverMovies({ providerIds, region, page: 1 }),
-            discoverMovies({ providerIds, region, page: 2 }),
-          ])
-          movies = [...(p1.results || []), ...(p2.results || [])]
-        } else {
-          const [p1, p2] = await Promise.all([getTrendingMovies(1), getTrendingMovies(2)])
-          movies = [...(p1.results || []), ...(p2.results || [])]
-        }
+    try {
+      const providerIds = user?.streamingServices?.length ? user.streamingServices : null
+      const region = providerIds
+        ? (user?.hasVPN ? undefined : user?.country || undefined)
+        : undefined
+      const topGenres = topGenresFromLikes(user?.likedMovies)
 
-        const videoResults = await Promise.allSettled(movies.map(m => getMovieVideos(m.id)))
-        const reelData = []
-        for (let i = 0; i < movies.length; i++) {
-          if (videoResults[i].status !== 'fulfilled') continue
-          const videos = videoResults[i].value.results || []
-          const pick =
-            videos.find(v => v.type === 'Trailer' && v.site === 'YouTube' && v.official) ||
-            videos.find(v => v.type === 'Trailer' && v.site === 'YouTube') ||
-            videos.find(v => v.site === 'YouTube')
-          if (pick) reelData.push({ movie: movies[i], trailerKey: pick.key })
-        }
-        setReels(reelData)
-      } catch {
-        // silently fail — empty state shown
-      } finally {
-        setLoading(false)
+      // Rotate: cycle through top genres then a no-genre pass, then repeat
+      // This gives personalized variety: top genre → 2nd genre → … → popular → repeat
+      const cycleLength = topGenres.length + 1
+      const slot = genreRotationRef.current % cycleLength
+      const genreId = slot < topGenres.length ? topGenres[slot] : null
+      genreRotationRef.current += 1
+
+      const page = fetchPageRef.current
+      fetchPageRef.current += 1
+
+      let movies = []
+      if (providerIds) {
+        const data = await discoverMovies({ providerIds, region, genreId, page })
+        movies = data.results || []
+      } else if (genreId) {
+        const data = await discoverMovies({ genreId, page })
+        movies = data.results || []
+      } else {
+        const data = await getTrendingMovies(page)
+        movies = data.results || []
       }
+
+      // Deduplicate
+      const fresh = movies.filter(m => !seenIdsRef.current.has(m.id))
+      fresh.forEach(m => seenIdsRef.current.add(m.id))
+
+      const videoResults = await Promise.allSettled(fresh.map(m => getMovieVideos(m.id)))
+      const newReels = []
+      for (let i = 0; i < fresh.length; i++) {
+        if (videoResults[i].status !== 'fulfilled') continue
+        const videos = videoResults[i].value.results || []
+        const pick =
+          videos.find(v => v.type === 'Trailer' && v.site === 'YouTube' && v.official) ||
+          videos.find(v => v.type === 'Trailer' && v.site === 'YouTube') ||
+          videos.find(v => v.site === 'YouTube')
+        if (pick) newReels.push({ movie: fresh[i], trailerKey: pick.key })
+      }
+
+      setReels(prev => append ? [...prev, ...newReels] : newReels)
+    } catch {
+      // silently fail
+    } finally {
+      isFetchingRef.current = false
+      if (!append) setLoading(false); else setLoadingMore(false)
     }
-    load()
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initial load
+  useEffect(() => {
+    fetchReels(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // YouTube fires onReady when a player initialises — play + unmute the active one immediately
+  // Load more when within 5 reels of the end
+  useEffect(() => {
+    if (reels.length === 0) return
+    if (activeIndex >= reels.length - 5) {
+      fetchReels(true)
+    }
+  }, [activeIndex, reels.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // YouTube onReady — play + unmute the active player
   useEffect(() => {
     function onMessage(e) {
       try {
@@ -194,13 +240,13 @@ export default function ReelsPage() {
     })
   }, [activeIndex]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mute toggle — only affects the active player
+  // Mute toggle
   useEffect(() => {
     const el = iframeRefs.current[activeIndex]
     if (el) ytCmd(el, muted ? 'mute' : 'unMute')
   }, [muted, activeIndex])
 
-  // IntersectionObserver — high threshold so it only fires once snapped
+  // IntersectionObserver
   useEffect(() => {
     if (reels.length === 0) return
     const observers = []
@@ -249,38 +295,30 @@ export default function ReelsPage() {
       )}
 
       {!loading && reels.length > 0 && (
-        <>
-          <div
-            className="flex-1 overflow-y-scroll"
-            style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
-          >
-            {reels.map((reel, i) => (
-              <div
-                key={`${reel.movie.id}-${reel.trailerKey}`}
-                ref={el => { itemRefs.current[i] = el }}
-                style={{ scrollSnapAlign: 'start', height: '100vh' }}
-              >
-                <ReelCard
-                  reel={reel}
-                  iframeRef={el => { iframeRefs.current[i] = el }}
-                  mounted={Math.abs(i - activeIndex) <= 1}
-                  onMovieClick={handleMovieClick}
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5">
-            {reels.map((_, i) => (
-              <div
-                key={i}
-                className={`rounded-full transition-all duration-300 ${
-                  i === activeIndex ? 'bg-white w-1.5 h-4' : 'bg-white/30 w-1.5 h-1.5'
-                }`}
+        <div
+          className="flex-1 overflow-y-scroll"
+          style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
+        >
+          {reels.map((reel, i) => (
+            <div
+              key={`${reel.movie.id}-${reel.trailerKey}`}
+              ref={el => { itemRefs.current[i] = el }}
+              style={{ scrollSnapAlign: 'start', height: '100vh' }}
+            >
+              <ReelCard
+                reel={reel}
+                iframeRef={el => { iframeRefs.current[i] = el }}
+                mounted={Math.abs(i - activeIndex) <= 1}
+                onMovieClick={handleMovieClick}
               />
-            ))}
-          </div>
-        </>
+            </div>
+          ))}
+          {loadingMore && (
+            <div style={{ scrollSnapAlign: 'start', height: '100vh' }} className="flex items-center justify-center">
+              <div className="w-10 h-10 border-4 border-gray-700 border-t-[#E50914] rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
