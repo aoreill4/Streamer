@@ -18,7 +18,17 @@ function saveUsers(users) {
 }
 
 function getUserById(id) {
-  return getUsers().find(u => u.id === id) || null
+  const u = getUsers().find(u => u.id === id) || null
+  if (!u) return null
+  // Ensure arrays exist for users created before these fields were added
+  return {
+    watchlist: [],
+    likedMovies: [],
+    streamingServices: [],
+    hasVPN: false,
+    country: '',
+    ...u,
+  }
 }
 
 function getCurrentUserId() {
@@ -41,7 +51,7 @@ export function AuthProvider({ children }) {
       return { ok: false, error: 'Invalid email or password.' }
     }
     localStorage.setItem(SESSION_KEY, found.id)
-    setUser(found)
+    setUser(getUserById(found.id))
     return { ok: true }
   }, [])
 
@@ -90,11 +100,12 @@ export function AuthProvider({ children }) {
   const addToWatchlist = useCallback((movie) => {
     setUser(prev => {
       if (!prev) return prev
-      if (prev.watchlist.find(m => m.id === movie.id)) return prev
+      const watchlist = prev.watchlist || []
+      if (watchlist.find(m => m.id === movie.id)) return prev
       const updated = {
         ...prev,
         watchlist: [
-          ...prev.watchlist,
+          ...watchlist,
           {
             id: movie.id,
             title: movie.title,
@@ -115,7 +126,7 @@ export function AuthProvider({ children }) {
   const removeFromWatchlist = useCallback((movieId) => {
     setUser(prev => {
       if (!prev) return prev
-      const updated = { ...prev, watchlist: prev.watchlist.filter(m => m.id !== movieId) }
+      const updated = { ...prev, watchlist: (prev.watchlist || []).filter(m => m.id !== movieId) }
       const users = getUsers()
       const idx = users.findIndex(u => u.id === prev.id)
       if (idx !== -1) { users[idx] = updated; saveUsers(users) }
@@ -124,17 +135,18 @@ export function AuthProvider({ children }) {
   }, [])
 
   const isInWatchlist = useCallback((movieId) => {
-    return !!user?.watchlist.find(m => m.id === movieId)
+    return !!(user?.watchlist || []).find(m => m.id === movieId)
   }, [user])
 
   const likeMovie = useCallback((movie) => {
     setUser(prev => {
       if (!prev) return prev
-      if (prev.likedMovies.find(m => m.id === movie.id)) return prev
+      const likedMovies = prev.likedMovies || []
+      if (likedMovies.find(m => m.id === movie.id)) return prev
       const updated = {
         ...prev,
         likedMovies: [
-          ...prev.likedMovies,
+          ...likedMovies,
           {
             id: movie.id,
             title: movie.title,
@@ -155,7 +167,7 @@ export function AuthProvider({ children }) {
   const unlikeMovie = useCallback((movieId) => {
     setUser(prev => {
       if (!prev) return prev
-      const updated = { ...prev, likedMovies: prev.likedMovies.filter(m => m.id !== movieId) }
+      const updated = { ...prev, likedMovies: (prev.likedMovies || []).filter(m => m.id !== movieId) }
       const users = getUsers()
       const idx = users.findIndex(u => u.id === prev.id)
       if (idx !== -1) { users[idx] = updated; saveUsers(users) }
@@ -164,7 +176,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const isLiked = useCallback((movieId) => {
-    return !!user?.likedMovies.find(m => m.id === movieId)
+    return !!(user?.likedMovies || []).find(m => m.id === movieId)
   }, [user])
 
   return (

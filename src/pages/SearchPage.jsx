@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar.jsx'
 import MovieCard from '../components/MovieCard.jsx'
-import { searchMovies, getPopularMovies, getGenres, discoverMovies } from '../lib/tmdb.js'
+import { searchMovies, getPopularMovies, getGenres, discoverMovies, getWatchProviders } from '../lib/tmdb.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function SearchPage() {
@@ -73,7 +73,28 @@ export default function SearchPage() {
     setError(null)
     try {
       const data = await searchMovies(q, p)
-      setResults(data.results || [])
+      let movies = data.results || []
+
+      const services = user?.streamingServices
+      if (services?.length) {
+        const providerResults = await Promise.allSettled(movies.map(m => getWatchProviders(m.id)))
+        movies = movies.filter((_, i) => {
+          if (providerResults[i].status !== 'fulfilled') return false
+          const byRegion = providerResults[i].value?.results || {}
+          if (user.hasVPN) {
+            return Object.values(byRegion).some(rd =>
+              (rd.flatrate || []).some(pr => services.includes(pr.provider_id))
+            )
+          }
+          if (user.country) {
+            const rd = byRegion[user.country] || {}
+            return (rd.flatrate || []).some(pr => services.includes(pr.provider_id))
+          }
+          return true
+        })
+      }
+
+      setResults(movies)
       setTotalPages(Math.min(data.total_pages || 0, 500))
       setPage(p)
       setHasSearched(true)
@@ -83,7 +104,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.streamingServices, user?.hasVPN, user?.country])
 
   function handleSearch() {
     if (!query.trim()) return
@@ -170,13 +191,22 @@ export default function SearchPage() {
               <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
                 <span className="text-5xl">🔍</span>
                 <p className="text-gray-400 text-lg">No movies found for &ldquo;{query}&rdquo;</p>
-                <p className="text-gray-600 text-sm">Try a different search term.</p>
+                {user?.streamingServices?.length ? (
+                  <p className="text-gray-600 text-sm">No results available on your streaming services. Try a different search or update your services in Profile.</p>
+                ) : (
+                  <p className="text-gray-600 text-sm">Try a different search term.</p>
+                )}
               </div>
             )}
             {!loading && results.length > 0 && (
               <>
-                <div className="mb-4 text-gray-500 text-sm">
-                  Results for &ldquo;{query}&rdquo; — page {page} of {totalPages}
+                <div className="mb-4 text-gray-500 text-sm flex items-center gap-2 flex-wrap">
+                  <span>Results for &ldquo;{query}&rdquo; — page {page} of {totalPages}</span>
+                  {user?.streamingServices?.length > 0 && (
+                    <span className="text-xs bg-[#1f1f1f] px-2 py-0.5 rounded-full text-gray-400">
+                      filtered to your services
+                    </span>
+                  )}
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
                   {results.map(movie => <MovieCard key={movie.id} movie={movie} />)}

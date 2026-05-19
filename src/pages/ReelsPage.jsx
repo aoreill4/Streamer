@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { getTrendingMovies, getMovieVideos, IMG_BASE } from '../lib/tmdb.js'
+import { getTrendingMovies, getMovieVideos, discoverMovies, IMG_BASE } from '../lib/tmdb.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 function ytCmd(iframe, func, args = []) {
@@ -107,6 +107,7 @@ export default function ReelsPage() {
   const [loading, setLoading] = useState(true)
   const [activeIndex, setActiveIndex] = useState(0)
   const [muted, setMuted] = useState(false)
+  const { user } = useAuth()
   const navigate = useNavigate()
   const itemRefs = useRef([])
   const iframeRefs = useRef({})
@@ -120,8 +121,23 @@ export default function ReelsPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [p1, p2] = await Promise.all([getTrendingMovies(1), getTrendingMovies(2)])
-        const movies = [...(p1.results || []), ...(p2.results || [])]
+        const providerIds = user?.streamingServices?.length ? user.streamingServices : null
+        const region = providerIds
+          ? (user?.hasVPN ? undefined : user?.country || undefined)
+          : undefined
+
+        let movies = []
+        if (providerIds) {
+          const [p1, p2] = await Promise.all([
+            discoverMovies({ providerIds, region, page: 1 }),
+            discoverMovies({ providerIds, region, page: 2 }),
+          ])
+          movies = [...(p1.results || []), ...(p2.results || [])]
+        } else {
+          const [p1, p2] = await Promise.all([getTrendingMovies(1), getTrendingMovies(2)])
+          movies = [...(p1.results || []), ...(p2.results || [])]
+        }
+
         const videoResults = await Promise.allSettled(movies.map(m => getMovieVideos(m.id)))
         const reelData = []
         for (let i = 0; i < movies.length; i++) {
@@ -141,7 +157,7 @@ export default function ReelsPage() {
       }
     }
     load()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // YouTube fires onReady when a player initialises — play + unmute the active one immediately
   useEffect(() => {
