@@ -54,10 +54,23 @@ export async function getGenres() {
   return apiFetch(`${BASE}/genre/movie/list?api_key=${KEY}`)
 }
 
-export async function discoverMovies(genreId, page = 1) {
-  return apiFetch(
-    `${BASE}/discover/movie?api_key=${KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}&include_adult=false`
-  )
+// options: { genreId, providerIds, region, page }
+// providerIds: array of TMDB provider_id numbers
+// region: ISO 3166-1 country code — omit for global (VPN users)
+export async function discoverMovies({ genreId, providerIds, region, page = 1 } = {}) {
+  const params = new URLSearchParams({
+    api_key: KEY,
+    sort_by: 'popularity.desc',
+    page: String(page),
+    include_adult: 'false',
+  })
+  if (genreId) params.set('with_genres', String(genreId))
+  if (providerIds?.length) {
+    params.set('with_watch_providers', providerIds.join('|'))
+    params.set('watch_monetization_types', 'flatrate')
+    if (region) params.set('watch_region', region)
+  }
+  return apiFetch(`${BASE}/discover/movie?${params}`)
 }
 
 export async function getMovieRecommendations(id) {
@@ -66,4 +79,8 @@ export async function getMovieRecommendations(id) {
 
 export async function getWatchProvidersList() {
   return apiFetch(`${BASE}/watch/providers/movie?api_key=${KEY}&language=en-US`)
+}
+
+export async function getWatchRegions() {
+  return apiFetch(`${BASE}/watch/providers/regions?api_key=${KEY}&language=en-US`)
 }

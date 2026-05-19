@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar.jsx'
 import MovieCard from '../components/MovieCard.jsx'
 import { searchMovies, getPopularMovies, getGenres, discoverMovies } from '../lib/tmdb.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [results, setResults] = useState([])
@@ -32,9 +34,18 @@ export default function SearchPage() {
   const loadBrowse = useCallback(async (genreId, p = 1) => {
     setBrowseLoading(true)
     try {
-      const data = genreId
-        ? await discoverMovies(genreId, p)
-        : await getPopularMovies(p)
+      const providerIds = user?.streamingServices?.length ? user.streamingServices : null
+      // VPN users get global results (no region); country users get their region only
+      const region = providerIds
+        ? (user?.hasVPN ? undefined : user?.country || undefined)
+        : undefined
+
+      const data = providerIds
+        ? await discoverMovies({ genreId, providerIds, region, page: p })
+        : genreId
+          ? await discoverMovies({ genreId, page: p })
+          : await getPopularMovies(p)
+
       setBrowseMovies(data.results || [])
       setBrowseTotalPages(Math.min(data.total_pages || 0, 500))
       setBrowsePage(p)
@@ -43,7 +54,7 @@ export default function SearchPage() {
     } finally {
       setBrowseLoading(false)
     }
-  }, [])
+  }, [user?.streamingServices, user?.hasVPN, user?.country])
 
   // Initial load — search from URL param, or load browse
   useEffect(() => {
@@ -181,6 +192,16 @@ export default function SearchPage() {
         {/* Browse (popular / genre) */}
         {!hasSearched && (
           <>
+            {user?.streamingServices?.length > 0 && (
+              <div className="mb-4 flex items-center gap-2 text-xs text-gray-400 bg-[#1f1f1f] rounded-lg px-3 py-2">
+                <span>🎬</span>
+                <span>
+                  Showing movies on your services
+                  {user.hasVPN ? ' · all regions (VPN)' : user.country ? ` · ${user.country}` : ''}
+                </span>
+                <a href="/profile" className="ml-auto text-[#E50914] hover:underline">Edit services</a>
+              </div>
+            )}
             <div className="mb-5 flex items-center gap-3">
               <h2 className="text-white text-lg font-semibold">{browseLabel}</h2>
               {activeGenre && (

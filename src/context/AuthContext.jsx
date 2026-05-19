@@ -57,6 +57,7 @@ export function AuthProvider({ children }) {
       password,
       streamingServices: [],
       hasVPN: false,
+      country: '',
       watchlist: [],
       likedMovies: [],
     }

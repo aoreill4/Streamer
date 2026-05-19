@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getWatchProvidersList } from '../lib/tmdb.js'
+import { getWatchProvidersList, getWatchRegions } from '../lib/tmdb.js'
 import { IMG_BASE } from '../lib/tmdb.js'
 
 // ── VPN Toggle pill ────────────────────────────────────────────────────────
@@ -181,6 +181,8 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
   const [providers, setProviders] = useState([])
   const [selected, setSelected] = useState([])
   const [hasVPN, setHasVPN] = useState(false)
+  const [country, setCountry] = useState('')
+  const [regions, setRegions] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -190,6 +192,13 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
         const sorted = (data.results || [])
           .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
         setProviders(sorted)
+      })
+      .catch(() => {})
+    getWatchRegions()
+      .then(data => {
+        const sorted = (data.results || [])
+          .sort((a, b) => a.english_name.localeCompare(b.english_name))
+        setRegions(sorted)
       })
       .catch(() => {})
   }, [])
@@ -210,7 +219,7 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
       setError(result.error)
       return
     }
-    updateUser({ streamingServices: selected, hasVPN })
+    updateUser({ streamingServices: selected, hasVPN, country })
     setLoading(false)
     navigate('/', { replace: true })
   }
@@ -256,12 +265,31 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
         )}
       </div>
 
-      <div className="flex items-center justify-between bg-[#2a2a2a] rounded-xl px-4 py-3">
-        <div>
-          <p className="text-white text-sm font-medium">I use a VPN</p>
-          <p className="text-gray-500 text-xs mt-0.5">Access more content from other regions</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between bg-[#2a2a2a] rounded-xl px-4 py-3">
+          <div>
+            <p className="text-white text-sm font-medium">I use a VPN</p>
+            <p className="text-gray-500 text-xs mt-0.5">Access more content from other regions</p>
+          </div>
+          <VpnToggle value={hasVPN} onChange={setHasVPN} />
         </div>
-        <VpnToggle value={hasVPN} onChange={setHasVPN} />
+        <div className="bg-[#2a2a2a] rounded-xl px-4 py-3">
+          <p className="text-white text-sm font-medium mb-2">Your country</p>
+          <select
+            value={country}
+            onChange={e => setCountry(e.target.value)}
+            disabled={hasVPN}
+            className="w-full bg-[#1f1f1f] border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-[#E50914] outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <option value="">— Select your country —</option>
+            {regions.map(r => (
+              <option key={r.iso_3166_1} value={r.iso_3166_1}>{r.english_name}</option>
+            ))}
+          </select>
+          {hasVPN && (
+            <p className="text-gray-500 text-xs mt-1.5">VPN enabled — all regions unlocked</p>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-red-400 text-sm">{error}</p>}

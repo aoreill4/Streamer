@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getMovieRecommendations, getWatchProvidersList, IMG_BASE } from '../lib/tmdb.js'
+import { getMovieRecommendations, getWatchProvidersList, getWatchRegions, IMG_BASE } from '../lib/tmdb.js'
 import MovieCard from '../components/MovieCard.jsx'
 
 // ── VPN Toggle pill ────────────────────────────────────────────────────────
@@ -177,6 +177,8 @@ function SettingsSection() {
   const [providers, setProviders] = useState([])
   const [selectedServices, setSelectedServices] = useState(user?.streamingServices || [])
   const [hasVPN, setHasVPN] = useState(user?.hasVPN || false)
+  const [country, setCountry] = useState(user?.country || '')
+  const [regions, setRegions] = useState([])
   const [servicesSaved, setServicesSaved] = useState(false)
 
   // Password change state
@@ -192,6 +194,13 @@ function SettingsSection() {
         const sorted = (data.results || [])
           .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
         setProviders(sorted)
+      })
+      .catch(() => {})
+    getWatchRegions()
+      .then(data => {
+        const sorted = (data.results || [])
+          .sort((a, b) => a.english_name.localeCompare(b.english_name))
+        setRegions(sorted)
       })
       .catch(() => {})
   }, [])
@@ -212,6 +221,11 @@ function SettingsSection() {
   function toggleVPN(val) {
     setHasVPN(val)
     updateUser({ hasVPN: val })
+  }
+
+  function handleCountryChange(val) {
+    setCountry(val)
+    updateUser({ country: val })
   }
 
   function handlePasswordSave(e) {
@@ -276,14 +290,31 @@ function SettingsSection() {
         </button>
       </div>
 
-      {/* VPN toggle */}
-      <div className="bg-[#1f1f1f] rounded-xl p-5 mb-4">
+      {/* VPN toggle + country */}
+      <div className="bg-[#1f1f1f] rounded-xl p-5 mb-4 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white text-sm font-medium">VPN</p>
             <p className="text-gray-500 text-xs mt-0.5">I use a VPN to access more content</p>
           </div>
           <VpnToggle value={hasVPN} onChange={toggleVPN} />
+        </div>
+        <div>
+          <p className="text-white text-sm font-medium mb-2">Your country</p>
+          <select
+            value={country}
+            onChange={e => handleCountryChange(e.target.value)}
+            disabled={hasVPN}
+            className="w-full bg-[#2a2a2a] border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-[#E50914] outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <option value="">— Select your country —</option>
+            {regions.map(r => (
+              <option key={r.iso_3166_1} value={r.iso_3166_1}>{r.english_name}</option>
+            ))}
+          </select>
+          {hasVPN && (
+            <p className="text-gray-500 text-xs mt-1.5">VPN enabled — all regions unlocked</p>
+          )}
         </div>
       </div>
 
