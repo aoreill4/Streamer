@@ -89,7 +89,7 @@ function runtime(minutes) {
 export default function DetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isInWatchlist, addToWatchlist, removeFromWatchlist, isLiked, likeMovie, unlikeMovie } = useAuth()
 
   const [movie, setMovie] = useState(null)
   const [providers, setProviders] = useState([])
@@ -240,14 +240,50 @@ export default function DetailPage() {
                   {movie.overview}
                 </p>
               )}
-              {trailer && (
-                <button
-                  onClick={() => setShowTrailer(true)}
-                  className="mt-3 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200"
-                >
-                  <span className="text-[#E50914]">▶</span> Watch Trailer
-                </button>
-              )}
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {trailer && (
+                  <button
+                    onClick={() => setShowTrailer(true)}
+                    className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200"
+                  >
+                    <span className="text-[#E50914]">▶</span> Watch Trailer
+                  </button>
+                )}
+                {user && movie && (() => {
+                  const saved = isInWatchlist(movie.id)
+                  const liked = isLiked(movie.id)
+                  return (
+                    <>
+                      <button
+                        onClick={() => saved ? removeFromWatchlist(movie.id) : addToWatchlist(movie)}
+                        className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
+                          saved
+                            ? 'bg-[#E50914]/20 text-[#E50914] hover:bg-[#E50914]/30'
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                        </svg>
+                        {saved ? 'Saved' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => liked ? unlikeMovie(movie.id) : likeMovie(movie)}
+                        className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
+                          liked
+                            ? 'bg-[#E50914]/20 text-[#E50914] hover:bg-[#E50914]/30'
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        {liked ? 'Liked' : 'Like'}
+                      </button>
+                    </>
+                  )
+                })()}
+              </div>
             </div>
           </div>
         </div>

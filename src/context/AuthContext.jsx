@@ -17,6 +17,17 @@ function saveUsers(users) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users))
 }
 
+function persistUser(updated) {
+  const users = getUsers()
+  const idx = users.findIndex(u => u.id === updated.id)
+  if (idx !== -1) {
+    users[idx] = updated
+  } else {
+    users.push(updated)
+  }
+  saveUsers(users)
+}
+
 function getUserById(id) {
   const u = getUsers().find(u => u.id === id) || null
   if (!u) return null
@@ -87,12 +98,7 @@ export function AuthProvider({ children }) {
     setUser(prev => {
       if (!prev) return prev
       const merged = { ...prev, ...updates }
-      const users = getUsers()
-      const idx = users.findIndex(u => u.id === prev.id)
-      if (idx !== -1) {
-        users[idx] = merged
-        saveUsers(users)
-      }
+      persistUser(merged)
       return merged
     })
   }, [])
@@ -116,9 +122,7 @@ export function AuthProvider({ children }) {
           },
         ],
       }
-      const users = getUsers()
-      const idx = users.findIndex(u => u.id === prev.id)
-      if (idx !== -1) { users[idx] = updated; saveUsers(users) }
+      persistUser(updated)
       return updated
     })
   }, [])
@@ -127,9 +131,7 @@ export function AuthProvider({ children }) {
     setUser(prev => {
       if (!prev) return prev
       const updated = { ...prev, watchlist: (prev.watchlist || []).filter(m => m.id !== movieId) }
-      const users = getUsers()
-      const idx = users.findIndex(u => u.id === prev.id)
-      if (idx !== -1) { users[idx] = updated; saveUsers(users) }
+      persistUser(updated)
       return updated
     })
   }, [])
@@ -157,9 +159,7 @@ export function AuthProvider({ children }) {
           },
         ],
       }
-      const users = getUsers()
-      const idx = users.findIndex(u => u.id === prev.id)
-      if (idx !== -1) { users[idx] = updated; saveUsers(users) }
+      persistUser(updated)
       return updated
     })
   }, [])
@@ -168,9 +168,7 @@ export function AuthProvider({ children }) {
     setUser(prev => {
       if (!prev) return prev
       const updated = { ...prev, likedMovies: (prev.likedMovies || []).filter(m => m.id !== movieId) }
-      const users = getUsers()
-      const idx = users.findIndex(u => u.id === prev.id)
-      if (idx !== -1) { users[idx] = updated; saveUsers(users) }
+      persistUser(updated)
       return updated
     })
   }, [])
