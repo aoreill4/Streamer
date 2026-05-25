@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getMovieRecommendations, getWatchProvidersList, getWatchRegions, IMG_BASE } from '../lib/tmdb.js'
-import { eloToScore } from '../lib/elo.js'
+import { BASE_ELO, eloToScore } from '../lib/elo.js'
 import { deduplicateProviders, isProviderSelected, toggleProvider as toggleProviderGroup } from '../lib/providers.js'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 import MovieCard from '../components/MovieCard.jsx'
@@ -70,19 +70,49 @@ function RecommendationsSection() {
     }
 
     async function fetchRecs() {
-      const recent = user.watchedMovies.slice(-5)
-      const results = await Promise.allSettled(
-        recent.map(m => getMovieRecommendations(m.id))
-      )
-
       const watchlistIds = new Set((user.watchlist || []).map(m => m.id))
       const watchedIds = new Set((user.watchedMovies || []).map(m => m.id))
 
+      // Build a diverse pool of source movies:
+      // top-rated (by elo), most recent watched, and watchlist items — up to 2 each
+      const rated = Object.values(user.ratedMovies || {})
+        .filter(m => m.comparisons > 0)
+        .sort((a, b) => b.elo - a.elo)
+      const topRated = rated.slice(0, 2)
+      const recentWatched = [...user.watchedMovies].reverse().slice(0, 2)
+      const watchlistSample = (user.watchlist || []).slice(0, 2)
+
       const seen = new Set()
+      const sourceSets = [topRated, recentWatched, watchlistSample]
+      const sources = []
+      // Interleave sources so results are diverse across categories
+      const maxLen = Math.max(...sourceSets.map(s => s.length))
+      for (let i = 0; i < maxLen; i++) {
+        for (const set of sourceSets) {
+          if (set[i]) sources.push(set[i])
+        }
+      }
+      // Deduplicate sources by id
+      const uniqueSources = []
+      const sourcesSeen = new Set()
+      for (const m of sources) {
+        if (!sourcesSeen.has(m.id)) { sourcesSeen.add(m.id); uniqueSources.push(m) }
+      }
+
+      const results = await Promise.allSettled(
+        uniqueSources.map(m => getMovieRecommendations(m.id))
+      )
+
+      // Interleave results from each source (round-robin) to keep diversity
+      const perSource = results.map(r =>
+        r.status === 'fulfilled' ? (r.value.results || []) : []
+      )
       const flat = []
-      for (const r of results) {
-        if (r.status !== 'fulfilled') continue
-        for (const movie of r.value.results || []) {
+      const maxMovies = Math.max(...perSource.map(a => a.length), 0)
+      for (let i = 0; i < maxMovies && flat.length < 24; i++) {
+        for (const arr of perSource) {
+          if (!arr[i]) continue
+          const movie = arr[i]
           if (seen.has(movie.id)) continue
           seen.add(movie.id)
           if (watchlistIds.has(movie.id)) continue
@@ -91,12 +121,6 @@ function RecommendationsSection() {
         }
       }
 
-      flat.sort((a, b) => {
-        const scoreA = a.vote_average * Math.log1p(a.popularity || 0)
-        const scoreB = b.vote_average * Math.log1p(b.popularity || 0)
-        return scoreB - scoreA
-      })
-
       setRecs(flat.slice(0, 12))
       setLoading(false)
     }
@@ -104,7 +128,7 @@ function RecommendationsSection() {
     fetchRecs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const noWatched = !user?.likedMovies || user.watchedMovies.length === 0
+  const noWatched = !user?.watchedMovies || user.watchedMovies.length === 0
 
   return (
     <section className="mb-10">
@@ -152,6 +176,9 @@ function RankingsSection() {
   const ranked = Object.values(ratedMovies)
     .filter(m => m.comparisons > 0)
     .sort((a, b) => b.elo - a.elo)
+
+  const maxElo = ranked[0]?.elo ?? BASE_ELO
+  const minElo = ranked[ranked.length - 1]?.elo ?? BASE_ELO
 
   const unranked = Object.values(ratedMovies)
     .filter(m => !m.comparisons)
@@ -221,7 +248,7 @@ function RankingsSection() {
                 <p className="text-white text-sm font-semibold leading-tight group-hover:text-[#E50914] transition-colors line-clamp-1">
                   {m.title}
                 </p>
-                <ScoreDisplay score={eloToScore(m.elo)} />
+                <ScoreDisplay score={eloToScore(m.elo, minElo, maxElo)} />
               </div>
               <span className="text-gray-700 text-xs flex-shrink-0">
                 {m.comparisons} {m.comparisons === 1 ? 'match' : 'matches'}

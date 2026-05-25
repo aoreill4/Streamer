@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { eloToScore } from '../lib/elo.js'
+import { BASE_ELO, eloToScore } from '../lib/elo.js'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 import { IMG_BASE } from '../lib/tmdb.js'
 
@@ -40,6 +40,8 @@ export default function RatingsPage() {
   const all = Object.values(ratedMovies)
   const ranked = all.filter(m => m.comparisons > 0).sort((a, b) => b.elo - a.elo)
   const unranked = all.filter(m => !m.comparisons)
+  const maxElo = ranked[0]?.elo ?? BASE_ELO
+  const minElo = ranked[ranked.length - 1]?.elo ?? BASE_ELO
   const totalComparisons = all.reduce((s, m) => s + (m.comparisons || 0), 0) / 2 | 0
 
   function startCompare() {
@@ -51,7 +53,7 @@ export default function RatingsPage() {
   const tierGroups = TIERS.map(tier => ({
     ...tier,
     movies: ranked.filter(m => {
-      const score = eloToScore(m.elo)
+      const score = eloToScore(m.elo, minElo, maxElo)
       const nextTier = TIERS[TIERS.indexOf(tier) - 1]
       return score >= tier.min && (!nextTier || score < nextTier.min)
     }),
@@ -117,7 +119,7 @@ export default function RatingsPage() {
             {view === 'ranked' && (
               <div className="flex flex-col gap-2">
                 {ranked.map((m, i) => {
-                  const score = eloToScore(m.elo)
+                  const score = eloToScore(m.elo, minElo, maxElo)
                   const tier = getTier(score)
                   return (
                     <Link
@@ -189,7 +191,7 @@ export default function RatingsPage() {
                           key={m.id}
                           to={`/movie/${m.id}`}
                           className="group relative"
-                          title={`${m.title} — ${eloToScore(m.elo).toFixed(1)}`}
+                          title={`${m.title} — ${eloToScore(m.elo, minElo, maxElo).toFixed(1)}`}
                         >
                           {m.poster_path ? (
                             <img
@@ -203,7 +205,7 @@ export default function RatingsPage() {
                             </div>
                           )}
                           <div className="absolute bottom-1 right-1 bg-black/70 rounded text-[8px] font-bold text-white px-1">
-                            {eloToScore(m.elo).toFixed(1)}
+                            {eloToScore(m.elo, minElo, maxElo).toFixed(1)}
                           </div>
                         </Link>
                       ))}
