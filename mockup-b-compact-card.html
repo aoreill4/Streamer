@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup B — Compact Floating Card</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #141414; font-family: system-ui, sans-serif; margin:0; }
+  .modal { animation: pop .28s cubic-bezier(.175,.885,.32,1.275) both; }
+  @keyframes pop { from { transform: scale(.88) translateY(16px); opacity:0; } to { transform: scale(1) translateY(0); opacity:1; } }
+  .choice { transition: transform .2s ease, border-color .18s, box-shadow .18s, opacity .22s; cursor: pointer; }
+  .choice:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.3) !important; }
+  .choice:active { transform: scale(.97); }
+  .winner { border-color: #E50914 !important; box-shadow: 0 0 0 3px rgba(229,9,20,.25) !important; transform: translateY(-4px) !important; }
+  .loser  { opacity: .2; transform: scale(.95) !important; border-color: transparent !important; }
+  .ring-pulse { animation: ringPulse 1.6s ease-in-out infinite; }
+  @keyframes ringPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,9,20,.4); } 60% { box-shadow: 0 0 0 8px rgba(229,9,20,0); } }
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+<div class="fixed inset-0 bg-black/75 backdrop-blur-md"></div>
+
+<!-- Compact centered card -->
+<div class="modal relative z-50 bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-white/8">
+
+  <!-- Top bar -->
+  <div class="flex items-center justify-between px-5 pt-5 pb-3">
+    <div class="flex gap-1">
+      <div class="w-6 h-1 rounded-full bg-[#E50914]"></div>
+      <div class="w-6 h-1 rounded-full bg-white"></div>
+      <div class="w-6 h-1 rounded-full bg-white/15"></div>
+    </div>
+    <span class="text-white font-bold text-sm">Which did you prefer?</span>
+    <button class="text-gray-600 hover:text-gray-300 text-xs transition-colors">Skip</button>
+  </div>
+
+  <!-- Movie choices -->
+  <div class="flex gap-3 px-4 pb-2">
+    <button class="choice flex-1 flex flex-col gap-2 border-2 border-white/8 rounded-2xl p-2.5 bg-black/20"
+      onclick="this.classList.add('winner','ring-pulse'); this.nextElementSibling.classList.add('loser')">
+      <img src="https://image.tmdb.org/t/p/w342/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"
+        class="w-full rounded-xl object-cover" style="aspect-ratio:2/3" />
+      <span class="text-white text-xs font-semibold text-center leading-tight px-1">The Shawshank Redemption</span>
+    </button>
+
+    <div class="flex items-center flex-shrink-0">
+      <span class="text-gray-700 text-[10px] font-black tracking-widest">VS</span>
+    </div>
+
+    <button class="choice flex-1 flex flex-col gap-2 border-2 border-white/8 rounded-2xl p-2.5 bg-black/20"
+      onclick="this.classList.add('winner','ring-pulse'); this.previousElementSibling.previousElementSibling.classList.add('loser')">
+      <img src="https://image.tmdb.org/t/p/w342/3bhkrj58Vtu7enYsLlegkAXLNQH.jpg"
+        class="w-full rounded-xl object-cover" style="aspect-ratio:2/3" />
+      <span class="text-white text-xs font-semibold text-center leading-tight px-1">The Godfather</span>
+    </button>
+  </div>
+
+  <!-- Footer hint -->
+  <p class="text-center text-gray-600 text-[10px] py-3">Tap a movie to choose · answers shape your rankings</p>
+</div>
+
+</body>
+</html>

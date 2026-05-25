@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup C — Split Banner (inline / no overlay)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #141414; font-family: system-ui, sans-serif; margin:0; }
+
+  /* Simulated page behind the banner */
+  .fake-page { filter: blur(1px) brightness(.5); pointer-events:none; user-select:none; }
+
+  .banner { animation: slideDown .3s cubic-bezier(.32,1,.5,1) both; }
+  @keyframes slideDown { from { transform: translateY(-110%); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+  .half {
+    flex:1; position:relative; overflow:hidden; cursor:pointer;
+    transition: flex .4s cubic-bezier(.4,0,.2,1);
+  }
+  .half:hover { flex: 1.12; }
+  .half:hover .overlay { opacity:.18; }
+  .half .overlay { position:absolute; inset:0; background:#000; opacity:.4; transition: opacity .2s; }
+  .half .label {
+    position:absolute; bottom:0; left:0; right:0;
+    padding: 40px 16px 16px;
+    background: linear-gradient(to top, rgba(0,0,0,.9) 0%, transparent 100%);
+  }
+  .half.picked { flex: 1.4; }
+  .half.picked .overlay { background: rgba(229,9,20,.18); opacity:1; }
+  .half.picked .ring { opacity:1; }
+  .half.dropped { flex: 0.6; opacity:.5; }
+  .half .ring { position:absolute; inset:0; box-shadow: inset 0 0 0 3px #E50914; border-radius:0; opacity:0; transition: opacity .25s; pointer-events:none; }
+
+  .vs-badge {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:10; width:32px; height:32px; border-radius:50%;
+    background:#1a1a1a; border: 1.5px solid rgba(255,255,255,.12);
+    display:flex; align-items:center; justify-content:center;
+    font-size:9px; font-weight:900; color:#666; letter-spacing:.06em;
+  }
+</style>
+</head>
+<body class="min-h-screen overflow-hidden">
+
+<!-- Fake page behind -->
+<div class="fake-page fixed inset-0 flex items-center justify-center">
+  <div class="text-gray-600 text-sm">Your reels / page content here</div>
+</div>
+
+<!-- Top banner — no full overlay, anchored to top -->
+<div class="banner fixed top-0 left-0 right-0 z-50 bg-[#111] border-b border-white/6 shadow-2xl"
+     style="max-height: 54vh">
+
+  <!-- Header strip -->
+  <div class="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+    <div class="flex items-center gap-2">
+      <span class="text-white font-bold text-xs tracking-widest uppercase">Rate</span>
+      <div class="flex gap-1 ml-1">
+        <div class="w-4 h-0.5 rounded-full bg-[#E50914]"></div>
+        <div class="w-4 h-0.5 rounded-full bg-white"></div>
+        <div class="w-4 h-0.5 rounded-full bg-white/15"></div>
+      </div>
+    </div>
+    <span class="text-gray-500 text-[11px]">Which did you prefer?</span>
+    <button class="text-gray-600 hover:text-gray-300 text-xs transition-colors">Skip</button>
+  </div>
+
+  <!-- Split posters -->
+  <div class="flex relative" style="height: calc(54vh - 44px)">
+    <div class="vs-badge">VS</div>
+
+    <!-- Left movie -->
+    <div class="half" onclick="this.classList.add('picked'); this.nextElementSibling.classList.add('dropped')">
+      <img src="https://image.tmdb.org/t/p/w342/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"
+        class="absolute inset-0 w-full h-full object-cover object-top" />
+      <div class="overlay"></div>
+      <div class="ring"></div>
+      <div class="label">
+        <p class="text-white text-sm font-bold leading-tight drop-shadow-lg">The Shawshank Redemption</p>
+        <p class="text-gray-400 text-[10px] mt-0.5">1994</p>
+      </div>
+    </div>
+
+    <!-- Right movie -->
+    <div class="half" onclick="this.classList.add('picked'); this.previousElementSibling.classList.add('dropped')">
+      <img src="https://image.tmdb.org/t/p/w342/3bhkrj58Vtu7enYsLlegkAXLNQH.jpg"
+        class="absolute inset-0 w-full h-full object-cover object-top" />
+      <div class="overlay"></div>
+      <div class="ring"></div>
+      <div class="label">
+        <p class="text-white text-sm font-bold leading-tight drop-shadow-lg">The Godfather</p>
+        <p class="text-gray-400 text-[10px] mt-0.5">1972</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

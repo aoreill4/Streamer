@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup A — Bottom Drawer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #141414; font-family: system-ui, sans-serif; }
+  .sheet { animation: slideUp 0.35s cubic-bezier(.32,1,.5,1) both; }
+  @keyframes slideUp { from { transform: translateY(100%); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  .card:active { transform: scale(0.97); }
+  .winner { border-color: #E50914 !important; background: rgba(229,9,20,.07); transform: scale(1.03); }
+  .loser  { border-color: transparent !important; opacity: .28; transform: scale(0.96); }
+  * { transition: transform .25s ease, opacity .25s ease, border-color .2s; }
+</style>
+</head>
+<body class="flex items-end justify-center min-h-screen p-0">
+
+<!-- Background page content blurred -->
+<div class="fixed inset-0 bg-[#141414] flex items-center justify-center text-gray-700 text-sm select-none pointer-events-none">
+  Page content behind sheet
+</div>
+<div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+
+<!-- Bottom Drawer Sheet -->
+<div class="sheet fixed bottom-0 left-0 right-0 bg-[#1a1a1a] rounded-t-3xl z-50 max-h-[72vh] flex flex-col shadow-2xl border-t border-white/5">
+
+  <!-- Drag handle -->
+  <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
+    <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+  </div>
+
+  <!-- Header -->
+  <div class="flex items-center justify-between px-5 py-3 flex-shrink-0">
+    <button class="text-gray-500 hover:text-white text-sm transition-colors" onclick="this.closest('.sheet').remove()">Skip</button>
+    <p class="text-white font-bold text-sm tracking-tight">Which did you prefer?</p>
+    <span class="text-gray-600 text-xs font-medium bg-white/5 px-2 py-0.5 rounded-full">2 / 3</span>
+  </div>
+
+  <!-- Progress -->
+  <div class="flex gap-1.5 px-5 pb-3 flex-shrink-0">
+    <div class="flex-1 h-0.5 bg-[#E50914] rounded-full"></div>
+    <div class="flex-1 h-0.5 bg-white rounded-full"></div>
+    <div class="flex-1 h-0.5 bg-white/15 rounded-full"></div>
+  </div>
+
+  <!-- Cards -->
+  <div class="flex gap-3 px-4 pb-4 flex-1 min-h-0 overflow-hidden">
+    <button class="card flex-1 flex flex-col items-center gap-2.5 border-2 border-white/10 rounded-2xl p-3 hover:border-white/25 cursor-pointer bg-transparent"
+      onclick="this.classList.add('winner'); this.nextElementSibling.classList.add('loser')">
+      <img src="https://image.tmdb.org/t/p/w342/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"
+        class="w-full rounded-xl object-cover shadow-lg" style="aspect-ratio:2/3" />
+      <span class="text-white text-sm font-semibold text-center leading-tight">The Shawshank Redemption</span>
+    </button>
+
+    <button class="card flex-1 flex flex-col items-center gap-2.5 border-2 border-white/10 rounded-2xl p-3 hover:border-white/25 cursor-pointer bg-transparent"
+      onclick="this.classList.add('winner'); this.previousElementSibling.classList.add('loser')">
+      <img src="https://image.tmdb.org/t/p/w342/3bhkrj58Vtu7enYsLlegkAXLNQH.jpg"
+        class="w-full rounded-xl object-cover shadow-lg" style="aspect-ratio:2/3" />
+      <span class="text-white text-sm font-semibold text-center leading-tight">The Godfather</span>
+    </button>
+  </div>
+
+  <!-- Safe area -->
+  <div class="pb-safe flex-shrink-0" style="padding-bottom: env(safe-area-inset-bottom, 12px)"></div>
+</div>
+
+</body>
+</html>
