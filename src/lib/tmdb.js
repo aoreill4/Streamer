@@ -87,8 +87,8 @@ export async function discoverMovies({ genreId, genreIds, keywordIds, providerId
   return apiFetch(`${BASE}/discover/movie?${params}`)
 }
 
-export async function getMovieRecommendations(id) {
-  return apiFetch(`${BASE}/movie/${id}/recommendations?api_key=${KEY}`)
+export async function getMovieRecommendations(id, page = 1) {
+  return apiFetch(`${BASE}/movie/${id}/recommendations?api_key=${KEY}&page=${page}`)
 }
 
 export async function getWatchProvidersList() {

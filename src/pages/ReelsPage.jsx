@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { getTrendingMovies, getMovieVideos, discoverMovies, IMG_BASE } from '../lib/tmdb.js'
-import { buildTasteClusters } from '../lib/clustering.js'
+import { getTrendingMovies, getMovieVideos, discoverMovies, getMovieRecommendations, IMG_BASE } from '../lib/tmdb.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 
@@ -119,28 +118,22 @@ export default function ReelsPage() {
   const iframeRefs = useRef({})
   const activeIndexRef = useRef(0)
   const mutedRef = useRef(false)
-  const fetchPageRef = useRef(1)
-  const clusterIdxRef = useRef(0)   // which taste cluster to draw from next
+  const fetchPageRef = useRef(1)         // used for fallback (trending/discover)
+  const recoSourcesRef = useRef([])      // watched movie IDs to pull recommendations from
+  const recoIdxRef = useRef(0)           // cycles through recoSources
+  const recoPageRef = useRef(new Map())  // tracks recommendation page per source movie
   const seenIdsRef = useRef(new Set())
   const isFetchingRef = useRef(false)
-  const tasteClustersRef = useRef([]) // computed once on mount
 
   useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
   useEffect(() => { mutedRef.current = muted }, [muted])
 
-  // Build taste clusters from liked + watchlisted movies on mount
+  // Seed seen IDs and build recommendation sources on mount
   useEffect(() => {
     const watched = user?.watchedMovies || []
-    const watchlisted = user?.watchlist || []
-    // Pre-seed seen IDs so already-watched movies never appear in the feed
     watched.forEach(m => seenIdsRef.current.add(m.id))
-    // Merge, deduplicate, prefer watched (they have stronger signal)
-    const seen = new Set()
-    const all = []
-    for (const m of [...watched, ...watchlisted]) {
-      if (!seen.has(m.id)) { seen.add(m.id); all.push(m) }
-    }
-    tasteClustersRef.current = buildTasteClusters(all)
+    // Most-recently watched first — freshest taste signal
+    recoSourcesRef.current = [...watched].reverse().map(m => m.id)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchReels = useCallback(async (append = false) => {
@@ -149,45 +142,30 @@ export default function ReelsPage() {
     if (!append) setLoading(true); else setLoadingMore(true)
 
     try {
-      const providerIds = user?.streamingServices?.length ? user.streamingServices : null
-      const region = providerIds
-        ? (user?.hasVPN ? undefined : user?.country || undefined)
-        : undefined
-
-      const clusters = tasteClustersRef.current
-      const page = fetchPageRef.current
-      fetchPageRef.current += 1
-
       let movies = []
+      const sources = recoSourcesRef.current
 
-      if (clusters.length > 0) {
-        // Pick next cluster in round-robin; every (clusters.length+1)th fetch is
-        // an unfiltered popularity pass to keep variety
-        const cycleLen = clusters.length + 1
-        const slot = clusterIdxRef.current % cycleLen
-        clusterIdxRef.current += 1
-
-        if (slot < clusters.length) {
-          const { keywordIds, genreIds } = clusters[slot]
-          // Prefer keyword-based discovery; fall back to genre-only if no keywords
-          movies = await discoverMovies({
-            keywordIds: keywordIds.length ? keywordIds.slice(0, 6) : undefined,
-            genreIds: genreIds.length ? genreIds.slice(0, 2) : undefined,
-            providerIds: providerIds || undefined,
-            region,
-            page,
-          }).then(d => d.results || [])
-        } else {
-          // Popularity pass (no genre/keyword filter, just services)
-          movies = await discoverMovies({ providerIds: providerIds || undefined, region, page })
-            .then(d => d.results || [])
-        }
-      } else if (providerIds) {
-        // No taste data yet — use services-filtered popularity
-        movies = await discoverMovies({ providerIds, region, page }).then(d => d.results || [])
+      if (sources.length > 0) {
+        // Cycle through watched movies round-robin, fetching TMDB recommendations
+        // for each — same engine as "Recommended for you" on the Profile page.
+        const sourceId = sources[recoIdxRef.current % sources.length]
+        recoIdxRef.current++
+        const page = recoPageRef.current.get(sourceId) || 1
+        recoPageRef.current.set(sourceId, page + 1)
+        movies = await getMovieRecommendations(sourceId, page).then(d => d.results || [])
       } else {
-        // Brand new user — trending
-        movies = await getTrendingMovies(page).then(d => d.results || [])
+        // No watch history yet — fall back to service-filtered discovery or trending
+        const providerIds = user?.streamingServices?.length ? user.streamingServices : null
+        const region = providerIds
+          ? (user?.hasVPN ? undefined : user?.country || undefined)
+          : undefined
+        const page = fetchPageRef.current
+        fetchPageRef.current++
+        if (providerIds) {
+          movies = await discoverMovies({ providerIds, region, page }).then(d => d.results || [])
+        } else {
+          movies = await getTrendingMovies(page).then(d => d.results || [])
+        }
       }
 
       // Deduplicate
@@ -286,7 +264,7 @@ export default function ReelsPage() {
 
   const handleMovieClick = useCallback((id) => navigate(`/movie/${id}`), [navigate])
 
-  const hasClusters = tasteClustersRef.current.length > 0
+  const isPersonalized = recoSourcesRef.current.length > 0
 
   return (
     <>
@@ -304,7 +282,7 @@ export default function ReelsPage() {
         <Link to="/" className="text-white/80 hover:text-white text-sm transition-colors">← Back</Link>
         <div className="flex flex-col items-center gap-0.5">
           <span className="text-white font-bold text-sm tracking-widest uppercase">Reels</span>
-          {hasClusters && (
+          {isPersonalized && (
             <span className="text-[10px] text-[#E50914] font-medium tracking-wide">
               personalized
             </span>
