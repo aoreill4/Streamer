@@ -22,6 +22,7 @@ export default function PersonPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(null) // 'acting' | 'directing'
+  const [sort, setSort] = useState('newest') // 'newest' | 'oldest' | 'popular' | 'rated'
   const [bioExpanded, setBioExpanded] = useState(false)
 
   useEffect(() => {
@@ -67,8 +68,16 @@ export default function PersonPage() {
   }
 
   const personAge = age(person.birthday, person.deathday)
-  const movies = tab === 'directing' ? directedMovies : actingMovies
   const BIO_LIMIT = 300
+
+  const base = tab === 'directing' ? directedMovies : actingMovies
+  const movies = [...base].sort((a, b) => {
+    if (sort === 'newest') return new Date(b.release_date) - new Date(a.release_date)
+    if (sort === 'oldest') return new Date(a.release_date) - new Date(b.release_date)
+    if (sort === 'popular') return (b.popularity || 0) - (a.popularity || 0)
+    if (sort === 'rated') return (b.vote_average || 0) - (a.vote_average || 0)
+    return 0
+  })
 
   return (
     <div className="min-h-screen">
@@ -139,31 +148,53 @@ export default function PersonPage() {
 
       {/* Filmography */}
       <div className="px-4 sm:px-8 pb-16 max-w-7xl mx-auto">
-        {/* Tabs */}
-        {actingMovies.length > 0 && directedMovies.length > 0 && (
-          <div className="flex gap-2 mb-6">
-            {['acting', 'directing'].map(t => (
+        {/* Tabs + sort row */}
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          {actingMovies.length > 0 && directedMovies.length > 0 && (
+            <div className="flex gap-2 mr-auto">
+              {['acting', 'directing'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => { setTab(t); setSort('newest') }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 ${
+                    tab === t
+                      ? 'bg-[#E50914] text-white'
+                      : 'bg-[#1f1f1f] text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {t === 'acting' ? `Acting (${actingMovies.length})` : `Directing (${directedMovies.length})`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Sort controls */}
+          <div className="flex gap-1 bg-[#1a1a1a] p-1 rounded-lg ml-auto">
+            {[
+              { key: 'newest', label: 'Newest' },
+              { key: 'oldest', label: 'Oldest' },
+              { key: 'popular', label: 'Popular' },
+              { key: 'rated', label: 'Top Rated' },
+            ].map(({ key, label }) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 ${
-                  tab === t
-                    ? 'bg-[#E50914] text-white'
-                    : 'bg-[#1f1f1f] text-gray-400 hover:text-white'
+                key={key}
+                onClick={() => setSort(key)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  sort === key ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
-                {t === 'acting' ? `Acting (${actingMovies.length})` : `Directing (${directedMovies.length})`}
+                {label}
               </button>
             ))}
           </div>
-        )}
+        </div>
 
         {movies.length === 0 ? (
           <p className="text-gray-500 text-sm py-12 text-center">No movies found.</p>
         ) : (
           <>
             <p className="text-gray-500 text-sm mb-4">
-              {movies.length} movie{movies.length !== 1 ? 's' : ''} · newest first
+              {movies.length} movie{movies.length !== 1 ? 's' : ''}
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
               {movies.map(movie => (
