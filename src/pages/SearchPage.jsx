@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar.jsx'
 import MovieCard from '../components/MovieCard.jsx'
-import { searchMovies, getPopularMovies, getGenres, discoverMovies, getWatchProviders } from '../lib/tmdb.js'
+import { searchMulti, getPopularMovies, getGenres, discoverMovies, getWatchProviders, IMG_BASE } from '../lib/tmdb.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function SearchPage() {
@@ -11,7 +11,8 @@ export default function SearchPage() {
   const { user } = useAuth()
 
   const [query, setQuery] = useState(searchParams.get('q') || '')
-  const [results, setResults] = useState([])
+  const [movieResults, setMovieResults] = useState([])
+  const [peopleResults, setPeopleResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
@@ -72,8 +73,12 @@ export default function SearchPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await searchMovies(q, p)
-      let movies = data.results || []
+      const data = await searchMulti(q, p)
+      const all = data.results || []
+
+      // Split people and movies; drop TV
+      const people = all.filter(r => r.media_type === 'person')
+      let movies = all.filter(r => r.media_type === 'movie')
 
       const services = user?.streamingServices
       if (services?.length) {
@@ -94,13 +99,15 @@ export default function SearchPage() {
         })
       }
 
-      setResults(movies)
+      setPeopleResults(people)
+      setMovieResults(movies)
       setTotalPages(Math.min(data.total_pages || 0, 500))
       setPage(p)
       setHasSearched(true)
     } catch (err) {
       setError(err.message || 'Something went wrong. Check your API key and try again.')
-      setResults([])
+      setMovieResults([])
+      setPeopleResults([])
     } finally {
       setLoading(false)
     }
@@ -187,10 +194,10 @@ export default function SearchPage() {
                 <div className="w-10 h-10 border-4 border-gray-700 border-t-[#E50914] rounded-full animate-spin" />
               </div>
             )}
-            {!loading && results.length === 0 && !error && (
+            {!loading && movieResults.length === 0 && peopleResults.length === 0 && !error && (
               <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
                 <span className="text-5xl">🔍</span>
-                <p className="text-gray-400 text-lg">No movies found for &ldquo;{query}&rdquo;</p>
+                <p className="text-gray-400 text-lg">No results for &ldquo;{query}&rdquo;</p>
                 {user?.streamingServices?.length ? (
                   <p className="text-gray-600 text-sm">No results available on your streaming services. Try a different search or update your services in Profile.</p>
                 ) : (
@@ -198,21 +205,42 @@ export default function SearchPage() {
                 )}
               </div>
             )}
-            {!loading && results.length > 0 && (
+            {!loading && (movieResults.length > 0 || peopleResults.length > 0) && (
               <>
                 <div className="mb-4 text-gray-500 text-sm flex items-center gap-2 flex-wrap">
-                  <span>Results for &ldquo;{query}&rdquo; — page {page} of {totalPages}</span>
+                  <span>Results for &ldquo;{query}&rdquo;</span>
                   {user?.streamingServices?.length > 0 && (
                     <span className="text-xs bg-[#1f1f1f] px-2 py-0.5 rounded-full text-gray-400">
                       filtered to your services
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-                  {results.map(movie => <MovieCard key={movie.id} movie={movie} />)}
-                </div>
-                {totalPages > 1 && (
-                  <Pagination page={page} total={totalPages} onPrev={handleSearchPrev} onNext={handleSearchNext} />
+
+                {/* People strip */}
+                {peopleResults.length > 0 && (
+                  <div className="mb-7">
+                    <h3 className="text-white text-sm font-semibold mb-3">People</h3>
+                    <div className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {peopleResults.map(person => (
+                        <PersonCard key={person.id} person={person} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Movies grid */}
+                {movieResults.length > 0 && (
+                  <>
+                    {peopleResults.length > 0 && (
+                      <h3 className="text-white text-sm font-semibold mb-3">Movies</h3>
+                    )}
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                      {movieResults.map(movie => <MovieCard key={movie.id} movie={movie} />)}
+                    </div>
+                    {totalPages > 1 && (
+                      <Pagination page={page} total={totalPages} onPrev={handleSearchPrev} onNext={handleSearchNext} />
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -266,6 +294,39 @@ export default function SearchPage() {
         )}
       </main>
     </div>
+  )
+}
+
+function PersonCard({ person }) {
+  const knownFor = person.known_for?.filter(k => k.media_type === 'movie').slice(0, 2).map(k => k.title).join(', ')
+  return (
+    <Link
+      to={`/person/${person.id}`}
+      className="flex-shrink-0 flex flex-col items-center gap-2 w-20 group"
+    >
+      {person.profile_path ? (
+        <img
+          src={`${IMG_BASE}/w185${person.profile_path}`}
+          alt={person.name}
+          className="w-16 h-16 rounded-full object-cover object-top border-2 border-white/8 group-hover:border-[#E50914] transition-colors"
+        />
+      ) : (
+        <div className="w-16 h-16 rounded-full bg-[#2a2a2a] flex items-center justify-center border-2 border-white/8 group-hover:border-[#E50914] transition-colors">
+          <span className="text-gray-500 text-xl">👤</span>
+        </div>
+      )}
+      <div className="text-center">
+        <p className="text-white text-xs font-semibold leading-tight line-clamp-2 group-hover:text-[#E50914] transition-colors">
+          {person.name}
+        </p>
+        {person.known_for_department && (
+          <p className="text-gray-600 text-[10px] mt-0.5">{person.known_for_department}</p>
+        )}
+        {knownFor && (
+          <p className="text-gray-700 text-[9px] mt-0.5 line-clamp-1">{knownFor}</p>
+        )}
+      </div>
+    </Link>
   )
 }
 

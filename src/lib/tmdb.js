@@ -18,6 +18,12 @@ export async function searchMovies(query, page = 1) {
   )
 }
 
+export async function searchMulti(query, page = 1) {
+  return apiFetch(
+    `${BASE}/search/multi?api_key=${KEY}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`
+  )
+}
+
 export async function getMovieDetails(id) {
   return apiFetch(`${BASE}/movie/${id}?api_key=${KEY}`)
 }
