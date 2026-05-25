@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react'
 import { getMovieKeywords } from '../lib/tmdb.js'
+import { BASE_ELO, updateElos } from '../lib/elo.js'
 
 const AuthContext = createContext(null)
 
@@ -38,6 +39,7 @@ function getUserById(id) {
     streamingServices: [],
     hasVPN: false,
     country: '',
+    ratedMovies: {},
     ...u,
   }
 }
@@ -105,6 +107,7 @@ export function AuthProvider({ children }) {
       country: '',
       watchlist: [],
       likedMovies: [],
+      ratedMovies: {},
     }
     saveUsers([...users, newUser])
     localStorage.setItem(SESSION_KEY, newUser.id)
@@ -177,14 +180,39 @@ export function AuthProvider({ children }) {
         genre_ids: movie.genre_ids || [],
         keyword_ids: movie.keyword_ids || [],
       }
-      const updated = { ...prev, likedMovies: [...likedMovies, entry] }
+      // Add to ratedMovies if not already there
+      const ratedMovies = prev.ratedMovies || {}
+      const ratedEntry = ratedMovies[movie.id] ?? {
+        id: movie.id,
+        title: movie.title,
+        poster_path: movie.poster_path,
+        elo: BASE_ELO,
+        comparisons: 0,
+      }
+      const updated = {
+        ...prev,
+        likedMovies: [...likedMovies, entry],
+        ratedMovies: { ...ratedMovies, [movie.id]: ratedEntry },
+      }
       persistUser(updated)
       return updated
     })
-    // Fetch keywords in background if not already present
-    if (!movie.keyword_ids?.length) {
-      enrichWithKeywords(movie.id, setUser)
-    }
+    if (!movie.keyword_ids?.length) enrichWithKeywords(movie.id, setUser)
+  }, [])
+
+  const recordComparison = useCallback((winnerId, loserId) => {
+    setUser(prev => {
+      if (!prev) return prev
+      const rated = { ...(prev.ratedMovies || {}) }
+      const winnerElo = rated[winnerId]?.elo ?? BASE_ELO
+      const loserElo = rated[loserId]?.elo ?? BASE_ELO
+      const { newEloA, newEloB } = updateElos(winnerElo, loserElo, true)
+      if (rated[winnerId]) rated[winnerId] = { ...rated[winnerId], elo: newEloA, comparisons: (rated[winnerId].comparisons || 0) + 1 }
+      if (rated[loserId]) rated[loserId] = { ...rated[loserId], elo: newEloB, comparisons: (rated[loserId].comparisons || 0) + 1 }
+      const updated = { ...prev, ratedMovies: rated }
+      persistUser(updated)
+      return updated
+    })
   }, [])
 
   const unlikeMovie = useCallback((movieId) => {
@@ -213,6 +241,8 @@ export function AuthProvider({ children }) {
       likeMovie,
       unlikeMovie,
       isLiked,
+      recordComparison,
+      ratedMovies: user?.ratedMovies ?? {},
     }}>
       {children}
     </AuthContext.Provider>

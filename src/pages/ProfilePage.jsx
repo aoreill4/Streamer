@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getMovieRecommendations, getWatchProvidersList, getWatchRegions, IMG_BASE } from '../lib/tmdb.js'
+import { eloToStars } from '../lib/elo.js'
+import ComparisonModal from '../components/ComparisonModal.jsx'
 import MovieCard from '../components/MovieCard.jsx'
 
 // ── VPN Toggle pill ────────────────────────────────────────────────────────
@@ -125,6 +127,118 @@ function RecommendationsSection() {
         </div>
       )}
     </section>
+  )
+}
+
+// ── Rankings section ───────────────────────────────────────────────────────
+function StarsDisplay({ stars }) {
+  const full = Math.floor(stars)
+  const half = (stars % 1) >= 0.5
+  return (
+    <span className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => (
+        <svg key={i} className={`w-3 h-3 ${i < full || (i === full && half) ? 'text-[#E50914]' : 'text-gray-700'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+      ))}
+      <span className="text-gray-500 text-xs ml-1">{stars.toFixed(1)}</span>
+    </span>
+  )
+}
+
+function RankingsSection() {
+  const { ratedMovies, recordComparison } = useAuth()
+  const [comparingPair, setComparingPair] = useState(null) // { movieA, movieB }
+
+  const ranked = Object.values(ratedMovies)
+    .filter(m => m.comparisons > 0)
+    .sort((a, b) => b.elo - a.elo)
+
+  const unranked = Object.values(ratedMovies)
+    .filter(m => !m.comparisons)
+
+  // Pick a random pair of unranked or low-comparison movies to compare
+  function startCompare() {
+    const pool = Object.values(ratedMovies).sort((a, b) => (a.comparisons || 0) - (b.comparisons || 0))
+    if (pool.length < 2) return
+    setComparingPair(pool[0])
+  }
+
+  if (Object.keys(ratedMovies).length === 0) return null
+
+  return (
+    <>
+    {comparingPair && (
+      <ComparisonModal
+        newMovie={comparingPair}
+        onClose={() => setComparingPair(null)}
+      />
+    )}
+    <section className="mb-10">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <h2 className="text-white text-lg font-semibold">My Rankings</h2>
+        {ranked.length > 0 && (
+          <span className="bg-[#1f1f1f] text-gray-400 text-xs px-2 py-0.5 rounded-full">
+            {ranked.length} ranked
+          </span>
+        )}
+        {Object.keys(ratedMovies).length >= 2 && (
+          <button
+            onClick={startCompare}
+            className="ml-auto text-xs bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold px-3 py-1.5 rounded-full transition-colors"
+          >
+            Compare movies
+          </button>
+        )}
+      </div>
+
+      {ranked.length === 0 && (
+        <p className="text-gray-500 text-sm py-4">
+          Like movies to start ranking them. After liking your second movie you'll be asked to compare them.
+        </p>
+      )}
+
+      {ranked.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {ranked.map((m, i) => (
+            <Link
+              key={m.id}
+              to={`/movie/${m.id}`}
+              className="flex items-center gap-3 bg-[#1f1f1f] hover:bg-[#252525] rounded-xl px-4 py-3 transition-colors group"
+            >
+              <span className="text-gray-600 text-sm font-bold w-6 flex-shrink-0 text-right">
+                {i + 1}
+              </span>
+              {m.poster_path ? (
+                <img
+                  src={`${IMG_BASE}/w92${m.poster_path}`}
+                  alt={m.title}
+                  className="w-9 h-12 rounded object-cover flex-shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-12 rounded bg-[#2a2a2a] flex-shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold leading-tight group-hover:text-[#E50914] transition-colors line-clamp-1">
+                  {m.title}
+                </p>
+                <StarsDisplay stars={eloToStars(m.elo)} />
+              </div>
+              <span className="text-gray-700 text-xs flex-shrink-0">
+                {m.comparisons} {m.comparisons === 1 ? 'match' : 'matches'}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {unranked.length > 0 && ranked.length > 0 && (
+        <p className="text-gray-600 text-xs mt-3">
+          {unranked.length} liked {unranked.length === 1 ? 'movie' : 'movies'} not yet compared — hit "Compare movies" to rank them.
+        </p>
+      )}
+    </section>
+    </>
   )
 }
 
@@ -375,6 +489,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen px-4 sm:px-8 py-8 max-w-6xl mx-auto w-full">
       <RecommendationsSection />
+      <RankingsSection />
       <WatchlistSection />
       <SettingsSection />
     </div>

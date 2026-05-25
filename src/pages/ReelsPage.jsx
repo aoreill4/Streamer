@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { getTrendingMovies, getMovieVideos, discoverMovies, IMG_BASE } from '../lib/tmdb.js'
 import { buildTasteClusters } from '../lib/clustering.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import ComparisonModal from '../components/ComparisonModal.jsx'
 
 function ytCmd(iframe, func, args = []) {
   iframe?.contentWindow?.postMessage(
@@ -11,9 +12,9 @@ function ytCmd(iframe, func, args = []) {
   )
 }
 
-function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
+function ReelCard({ reel, iframeRef, mounted, onMovieClick, onLiked }) {
   const { movie, trailerKey } = reel
-  const { user, isLiked, likeMovie, unlikeMovie, isInWatchlist, addToWatchlist, removeFromWatchlist } = useAuth()
+  const { user, isLiked, likeMovie, unlikeMovie, isInWatchlist, addToWatchlist, removeFromWatchlist, ratedMovies } = useAuth()
   const navigate = useNavigate()
   const year = movie.release_date?.slice(0, 4)
   const rating = movie.vote_average > 0 ? movie.vote_average.toFixed(1) : null
@@ -56,7 +57,12 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
       {/* Action buttons */}
       <div className="absolute right-4 bottom-24 z-10 flex flex-col items-center gap-5">
         <button
-          onClick={() => requireAuth(() => liked ? unlikeMovie(movie.id) : likeMovie(movie))}
+          onClick={() => requireAuth(() => {
+            if (liked) { unlikeMovie(movie.id) } else {
+              likeMovie(movie)
+              if (Object.keys(ratedMovies).length >= 1) onLiked?.(movie)
+            }
+          })}
           className="flex flex-col items-center gap-1"
         >
           <div className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur transition-all duration-200 ${liked ? 'bg-[#E50914]/20' : 'bg-black/40 hover:bg-black/60'}`}>
@@ -106,6 +112,7 @@ export default function ReelsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [muted, setMuted] = useState(false)
+  const [comparingMovie, setComparingMovie] = useState(null)
   const { user } = useAuth()
   const navigate = useNavigate()
   const itemRefs = useRef([])
@@ -280,6 +287,13 @@ export default function ReelsPage() {
   const hasClusters = tasteClustersRef.current.length > 0
 
   return (
+    <>
+    {comparingMovie && (
+      <ComparisonModal
+        newMovie={comparingMovie}
+        onClose={() => setComparingMovie(null)}
+      />
+    )}
     <div className="h-screen bg-black flex flex-col overflow-hidden md:ml-[220px]">
       <div
         className="absolute top-0 md:left-[220px] left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-10"
@@ -332,6 +346,7 @@ export default function ReelsPage() {
                 iframeRef={el => { iframeRefs.current[i] = el }}
                 mounted={Math.abs(i - activeIndex) <= 1}
                 onMovieClick={handleMovieClick}
+                onLiked={setComparingMovie}
               />
             </div>
           ))}
@@ -343,5 +358,6 @@ export default function ReelsPage() {
         </div>
       )}
     </div>
+    </>
   )
 }

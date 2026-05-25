@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import ProviderCard from '../components/ProviderCard.jsx'
 import Toggle from '../components/Toggle.jsx'
 import TrailerModal from '../components/TrailerModal.jsx'
+import ComparisonModal from '../components/ComparisonModal.jsx'
 import { Link } from 'react-router-dom'
 
 const COUNTRY_NAMES = {
@@ -89,7 +90,7 @@ function runtime(minutes) {
 export default function DetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, isInWatchlist, addToWatchlist, removeFromWatchlist, isLiked, likeMovie, unlikeMovie } = useAuth()
+  const { user, isInWatchlist, addToWatchlist, removeFromWatchlist, isLiked, likeMovie, unlikeMovie, ratedMovies } = useAuth()
 
   const [movie, setMovie] = useState(null)
   const [providers, setProviders] = useState([])
@@ -99,6 +100,7 @@ export default function DetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeType, setActiveType] = useState('flatrate')
+  const [comparingMovie, setComparingMovie] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -177,6 +179,13 @@ export default function DetailPage() {
     : null
 
   return (
+    <>
+    {comparingMovie && (
+      <ComparisonModal
+        newMovie={comparingMovie}
+        onClose={() => setComparingMovie(null)}
+      />
+    )}
     <div className="min-h-screen">
       {/* Back button */}
       <div className="px-4 sm:px-8 pt-6">
@@ -268,7 +277,12 @@ export default function DetailPage() {
                         {saved ? 'Saved' : 'Save'}
                       </button>
                       <button
-                        onClick={() => liked ? unlikeMovie(movie.id) : likeMovie(movie)}
+                        onClick={() => {
+                          if (liked) { unlikeMovie(movie.id) } else {
+                            likeMovie(movie)
+                            if (Object.keys(ratedMovies).length >= 1) setComparingMovie(movie)
+                          }
+                        }}
                         className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
                           liked
                             ? 'bg-[#E50914]/20 text-[#E50914] hover:bg-[#E50914]/30'
@@ -418,5 +432,6 @@ export default function DetailPage() {
         )}
       </div>
     </div>
+    </>
   )
 }
