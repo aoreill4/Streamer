@@ -7,6 +7,7 @@ import ReelsPage from './pages/ReelsPage.jsx'
 import PersonPage from './pages/PersonPage.jsx'
 import AuthPage from './pages/AuthPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
+import RatingsPage from './pages/RatingsPage.jsx'
 
 function RequireAuth({ children }) {
   const { user } = useAuth()
@@ -49,6 +50,16 @@ function AppRoutes() {
           <RequireAuth>
             <Layout>
               <PersonPage />
+            </Layout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/ratings"
+        element={
+          <RequireAuth>
+            <Layout>
+              <RatingsPage />
             </Layout>
           </RequireAuth>
         }
