@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import { getMovieKeywords } from '../lib/tmdb.js'
 
 const AuthContext = createContext(null)
 
@@ -31,7 +32,6 @@ function persistUser(updated) {
 function getUserById(id) {
   const u = getUsers().find(u => u.id === id) || null
   if (!u) return null
-  // Ensure arrays exist for users created before these fields were added
   return {
     watchlist: [],
     likedMovies: [],
@@ -44,6 +44,30 @@ function getUserById(id) {
 
 function getCurrentUserId() {
   return localStorage.getItem(SESSION_KEY) || null
+}
+
+// Fetch keywords for a movie and patch the user's movie entry with keyword_ids.
+// Runs async in the background after an optimistic UI update.
+async function enrichWithKeywords(movieId, setUser) {
+  try {
+    const data = await getMovieKeywords(movieId)
+    const keyword_ids = (data.keywords || []).map(k => k.id)
+    if (!keyword_ids.length) return
+    setUser(prev => {
+      if (!prev) return prev
+      const patchList = (list) =>
+        list.map(m => m.id === movieId ? { ...m, keyword_ids } : m)
+      const updated = {
+        ...prev,
+        likedMovies: patchList(prev.likedMovies || []),
+        watchlist: patchList(prev.watchlist || []),
+      }
+      persistUser(updated)
+      return updated
+    })
+  } catch {
+    // keywords unavailable — clustering falls back to genre-only
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -82,8 +106,7 @@ export function AuthProvider({ children }) {
       watchlist: [],
       likedMovies: [],
     }
-    const updated = [...users, newUser]
-    saveUsers(updated)
+    saveUsers([...users, newUser])
     localStorage.setItem(SESSION_KEY, newUser.id)
     setUser(newUser)
     return { ok: true }
@@ -108,23 +131,23 @@ export function AuthProvider({ children }) {
       if (!prev) return prev
       const watchlist = prev.watchlist || []
       if (watchlist.find(m => m.id === movie.id)) return prev
-      const updated = {
-        ...prev,
-        watchlist: [
-          ...watchlist,
-          {
-            id: movie.id,
-            title: movie.title,
-            poster_path: movie.poster_path,
-            release_date: movie.release_date,
-            vote_average: movie.vote_average,
-            genre_ids: movie.genre_ids,
-          },
-        ],
+      const entry = {
+        id: movie.id,
+        title: movie.title,
+        poster_path: movie.poster_path,
+        release_date: movie.release_date,
+        vote_average: movie.vote_average,
+        genre_ids: movie.genre_ids || [],
+        keyword_ids: movie.keyword_ids || [],
       }
+      const updated = { ...prev, watchlist: [...watchlist, entry] }
       persistUser(updated)
       return updated
     })
+    // Fetch keywords in background if not already present
+    if (!movie.keyword_ids?.length) {
+      enrichWithKeywords(movie.id, setUser)
+    }
   }, [])
 
   const removeFromWatchlist = useCallback((movieId) => {
@@ -145,23 +168,23 @@ export function AuthProvider({ children }) {
       if (!prev) return prev
       const likedMovies = prev.likedMovies || []
       if (likedMovies.find(m => m.id === movie.id)) return prev
-      const updated = {
-        ...prev,
-        likedMovies: [
-          ...likedMovies,
-          {
-            id: movie.id,
-            title: movie.title,
-            poster_path: movie.poster_path,
-            release_date: movie.release_date,
-            vote_average: movie.vote_average,
-            genre_ids: movie.genre_ids,
-          },
-        ],
+      const entry = {
+        id: movie.id,
+        title: movie.title,
+        poster_path: movie.poster_path,
+        release_date: movie.release_date,
+        vote_average: movie.vote_average,
+        genre_ids: movie.genre_ids || [],
+        keyword_ids: movie.keyword_ids || [],
       }
+      const updated = { ...prev, likedMovies: [...likedMovies, entry] }
       persistUser(updated)
       return updated
     })
+    // Fetch keywords in background if not already present
+    if (!movie.keyword_ids?.length) {
+      enrichWithKeywords(movie.id, setUser)
+    }
   }, [])
 
   const unlikeMovie = useCallback((movieId) => {

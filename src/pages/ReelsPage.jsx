@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { getTrendingMovies, getMovieVideos, discoverMovies, IMG_BASE } from '../lib/tmdb.js'
+import { buildTasteClusters } from '../lib/clustering.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 function ytCmd(iframe, func, args = []) {
@@ -8,19 +9,6 @@ function ytCmd(iframe, func, args = []) {
     JSON.stringify({ event: 'command', func, args }),
     '*'
   )
-}
-
-// Returns genre IDs sorted by how often they appear in liked movies
-function topGenresFromLikes(likedMovies) {
-  const counts = {}
-  for (const m of likedMovies || []) {
-    for (const gid of m.genre_ids || []) {
-      counts[gid] = (counts[gid] || 0) + 1
-    }
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => Number(id))
 }
 
 function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
@@ -65,11 +53,11 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
         style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.45) 100%)' }}
       />
 
-      {/* Action buttons — right side */}
+      {/* Action buttons */}
       <div className="absolute right-4 bottom-24 z-10 flex flex-col items-center gap-5">
         <button
           onClick={() => requireAuth(() => liked ? unlikeMovie(movie.id) : likeMovie(movie))}
-          className="flex flex-col items-center gap-1 group"
+          className="flex flex-col items-center gap-1"
         >
           <div className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur transition-all duration-200 ${liked ? 'bg-[#E50914]/20' : 'bg-black/40 hover:bg-black/60'}`}>
             <svg className={`w-6 h-6 transition-colors ${liked ? 'text-[#E50914]' : 'text-white'}`} viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
@@ -81,7 +69,7 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick }) {
 
         <button
           onClick={() => requireAuth(() => saved ? removeFromWatchlist(movie.id) : addToWatchlist(movie))}
-          className="flex flex-col items-center gap-1 group"
+          className="flex flex-col items-center gap-1"
         >
           <div className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur transition-all duration-200 ${saved ? 'bg-[#E50914]/20' : 'bg-black/40 hover:bg-black/60'}`}>
             <svg className={`w-6 h-6 transition-colors ${saved ? 'text-[#E50914]' : 'text-white'}`} viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
@@ -124,14 +112,27 @@ export default function ReelsPage() {
   const iframeRefs = useRef({})
   const activeIndexRef = useRef(0)
   const mutedRef = useRef(false)
-  // Fetch state that persists across loads without triggering re-renders
   const fetchPageRef = useRef(1)
-  const genreRotationRef = useRef(0)
+  const clusterIdxRef = useRef(0)   // which taste cluster to draw from next
   const seenIdsRef = useRef(new Set())
   const isFetchingRef = useRef(false)
+  const tasteClustersRef = useRef([]) // computed once on mount
 
   useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
   useEffect(() => { mutedRef.current = muted }, [muted])
+
+  // Build taste clusters from liked + watchlisted movies on mount
+  useEffect(() => {
+    const liked = user?.likedMovies || []
+    const watchlisted = user?.watchlist || []
+    // Merge, deduplicate, prefer liked (they have stronger signal)
+    const seen = new Set()
+    const all = []
+    for (const m of [...liked, ...watchlisted]) {
+      if (!seen.has(m.id)) { seen.add(m.id); all.push(m) }
+    }
+    tasteClustersRef.current = buildTasteClusters(all)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchReels = useCallback(async (append = false) => {
     if (isFetchingRef.current) return
@@ -143,28 +144,41 @@ export default function ReelsPage() {
       const region = providerIds
         ? (user?.hasVPN ? undefined : user?.country || undefined)
         : undefined
-      const topGenres = topGenresFromLikes(user?.likedMovies)
 
-      // Rotate: cycle through top genres then a no-genre pass, then repeat
-      // This gives personalized variety: top genre → 2nd genre → … → popular → repeat
-      const cycleLength = topGenres.length + 1
-      const slot = genreRotationRef.current % cycleLength
-      const genreId = slot < topGenres.length ? topGenres[slot] : null
-      genreRotationRef.current += 1
-
+      const clusters = tasteClustersRef.current
       const page = fetchPageRef.current
       fetchPageRef.current += 1
 
       let movies = []
-      if (providerIds) {
-        const data = await discoverMovies({ providerIds, region, genreId, page })
-        movies = data.results || []
-      } else if (genreId) {
-        const data = await discoverMovies({ genreId, page })
-        movies = data.results || []
+
+      if (clusters.length > 0) {
+        // Pick next cluster in round-robin; every (clusters.length+1)th fetch is
+        // an unfiltered popularity pass to keep variety
+        const cycleLen = clusters.length + 1
+        const slot = clusterIdxRef.current % cycleLen
+        clusterIdxRef.current += 1
+
+        if (slot < clusters.length) {
+          const { keywordIds, genreIds } = clusters[slot]
+          // Prefer keyword-based discovery; fall back to genre-only if no keywords
+          movies = await discoverMovies({
+            keywordIds: keywordIds.length ? keywordIds.slice(0, 6) : undefined,
+            genreIds: genreIds.length ? genreIds.slice(0, 2) : undefined,
+            providerIds: providerIds || undefined,
+            region,
+            page,
+          }).then(d => d.results || [])
+        } else {
+          // Popularity pass (no genre/keyword filter, just services)
+          movies = await discoverMovies({ providerIds: providerIds || undefined, region, page })
+            .then(d => d.results || [])
+        }
+      } else if (providerIds) {
+        // No taste data yet — use services-filtered popularity
+        movies = await discoverMovies({ providerIds, region, page }).then(d => d.results || [])
       } else {
-        const data = await getTrendingMovies(page)
-        movies = data.results || []
+        // Brand new user — trending
+        movies = await getTrendingMovies(page).then(d => d.results || [])
       }
 
       // Deduplicate
@@ -199,13 +213,12 @@ export default function ReelsPage() {
 
   // Load more when within 5 reels of the end
   useEffect(() => {
-    if (reels.length === 0) return
-    if (activeIndex >= reels.length - 5) {
+    if (reels.length > 0 && activeIndex >= reels.length - 5) {
       fetchReels(true)
     }
   }, [activeIndex, reels.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // YouTube onReady — play + unmute the active player
+  // YouTube onReady
   useEffect(() => {
     function onMessage(e) {
       try {
@@ -225,7 +238,7 @@ export default function ReelsPage() {
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  // Active index changed — play new, pause others
+  // Play/pause on index change
   useEffect(() => {
     Object.entries(iframeRefs.current).forEach(([idxStr, el]) => {
       if (!el) return
@@ -264,6 +277,8 @@ export default function ReelsPage() {
 
   const handleMovieClick = useCallback((id) => navigate(`/movie/${id}`), [navigate])
 
+  const hasClusters = tasteClustersRef.current.length > 0
+
   return (
     <div className="h-screen bg-black flex flex-col overflow-hidden md:ml-[220px]">
       <div
@@ -271,7 +286,14 @@ export default function ReelsPage() {
         style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)' }}
       >
         <Link to="/" className="text-white/80 hover:text-white text-sm transition-colors">← Back</Link>
-        <span className="text-white font-bold text-sm tracking-widest uppercase">Reels</span>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-white font-bold text-sm tracking-widest uppercase">Reels</span>
+          {hasClusters && (
+            <span className="text-[10px] text-[#E50914] font-medium tracking-wide">
+              personalized
+            </span>
+          )}
+        </div>
         <button
           onClick={() => setMuted(m => !m)}
           className="text-white/80 hover:text-white transition-colors text-xl w-8 h-8 flex items-center justify-center"

@@ -54,17 +54,25 @@ export async function getGenres() {
   return apiFetch(`${BASE}/genre/movie/list?api_key=${KEY}`)
 }
 
-// options: { genreId, providerIds, region, page }
+export async function getMovieKeywords(id) {
+  return apiFetch(`${BASE}/movie/${id}/keywords?api_key=${KEY}`)
+}
+
+// options: { genreId, genreIds, keywordIds, providerIds, region, page }
+// keywordIds: array of TMDB keyword IDs (OR-joined) — used for cluster-based discovery
 // providerIds: array of TMDB provider_id numbers
 // region: ISO 3166-1 country code — omit for global (VPN users)
-export async function discoverMovies({ genreId, providerIds, region, page = 1 } = {}) {
+export async function discoverMovies({ genreId, genreIds, keywordIds, providerIds, region, page = 1 } = {}) {
   const params = new URLSearchParams({
     api_key: KEY,
     sort_by: 'popularity.desc',
     page: String(page),
     include_adult: 'false',
   })
-  if (genreId) params.set('with_genres', String(genreId))
+  // Single genre (legacy) or array of genres
+  const genres = genreIds?.length ? genreIds : (genreId ? [genreId] : [])
+  if (genres.length) params.set('with_genres', genres.join('|'))
+  if (keywordIds?.length) params.set('with_keywords', keywordIds.join('|'))
   if (providerIds?.length) {
     params.set('with_watch_providers', providerIds.join('|'))
     params.set('watch_monetization_types', 'flatrate')
