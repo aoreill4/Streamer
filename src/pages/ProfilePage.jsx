@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getMovieRecommendations, getWatchProvidersList, getWatchRegions, IMG_BASE } from '../lib/tmdb.js'
 import { eloToStars } from '../lib/elo.js'
+import { deduplicateProviders, isProviderSelected, toggleProvider as toggleProviderGroup } from '../lib/providers.js'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 import MovieCard from '../components/MovieCard.jsx'
 
@@ -30,7 +31,7 @@ function ProviderSelectCard({ provider, selected, onToggle }) {
   return (
     <button
       type="button"
-      onClick={() => onToggle(provider.provider_id)}
+      onClick={() => onToggle(provider)}
       className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all duration-150 ${
         selected
           ? 'border-[#E50914] bg-[#E50914]/10'
@@ -305,11 +306,7 @@ function SettingsSection() {
 
   useEffect(() => {
     getWatchProvidersList()
-      .then(data => {
-        const sorted = (data.results || [])
-          .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
-        setProviders(sorted)
-      })
+      .then(data => setProviders(deduplicateProviders(data.results || [])))
       .catch(() => {})
     getWatchRegions()
       .then(data => {
@@ -320,10 +317,8 @@ function SettingsSection() {
       .catch(() => {})
   }, [])
 
-  function toggleService(id) {
-    setSelectedServices(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
+  function toggleService(provider) {
+    setSelectedServices(prev => toggleProviderGroup(provider, prev))
     setServicesSaved(false)
   }
 
@@ -414,8 +409,8 @@ function SettingsSection() {
               const filtered = providers.filter(p => !q || p.provider_name.toLowerCase().includes(q))
               const sorted = [...filtered].sort((a, b) => {
                 if (q) {
-                  const aOn = selectedServices.includes(a.provider_id)
-                  const bOn = selectedServices.includes(b.provider_id)
+                  const aOn = isProviderSelected(a, selectedServices)
+                  const bOn = isProviderSelected(b, selectedServices)
                   if (aOn !== bOn) return aOn ? -1 : 1
                 }
                 return (a.display_priority ?? 999) - (b.display_priority ?? 999)
@@ -428,7 +423,7 @@ function SettingsSection() {
                     <ProviderSelectCard
                       key={p.provider_id}
                       provider={p}
-                      selected={selectedServices.includes(p.provider_id)}
+                      selected={isProviderSelected(p, selectedServices)}
                       onToggle={toggleService}
                     />
                   ))}

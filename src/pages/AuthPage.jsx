@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getWatchProvidersList, getWatchRegions } from '../lib/tmdb.js'
 import { IMG_BASE } from '../lib/tmdb.js'
+import { deduplicateProviders, isProviderSelected, toggleProvider } from '../lib/providers.js'
 
 // ── VPN Toggle pill ────────────────────────────────────────────────────────
 function VpnToggle({ value, onChange }) {
@@ -189,11 +190,7 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
 
   useEffect(() => {
     getWatchProvidersList()
-      .then(data => {
-        const sorted = (data.results || [])
-          .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
-        setProviders(sorted)
-      })
+      .then(data => setProviders(deduplicateProviders(data.results || [])))
       .catch(() => {})
     getWatchRegions()
       .then(data => {
@@ -204,10 +201,8 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
       .catch(() => {})
   }, [])
 
-  function toggleProvider(id) {
-    setSelected(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
+  function handleToggleProvider(provider) {
+    setSelected(prev => toggleProvider(provider, prev))
   }
 
   async function handleFinish(e) {
@@ -262,8 +257,8 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
               const filtered = providers.filter(p => !q || p.provider_name.toLowerCase().includes(q))
               const sorted = [...filtered].sort((a, b) => {
                 if (q) {
-                  const aOn = selected.includes(a.provider_id)
-                  const bOn = selected.includes(b.provider_id)
+                  const aOn = isProviderSelected(a, selected)
+                  const bOn = isProviderSelected(b, selected)
                   if (aOn !== bOn) return aOn ? -1 : 1
                 }
                 return (a.display_priority ?? 999) - (b.display_priority ?? 999)
@@ -276,9 +271,9 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
                     <button
                       key={p.provider_id}
                       type="button"
-                      onClick={() => toggleProvider(p.provider_id)}
+                      onClick={() => handleToggleProvider(p)}
                       className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all duration-150 ${
-                        selected.includes(p.provider_id)
+                        isProviderSelected(p, selected)
                           ? 'border-[#E50914] bg-[#E50914]/10'
                           : 'border-white/5 bg-[#2a2a2a] hover:border-white/20'
                       }`}
