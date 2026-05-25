@@ -12,11 +12,12 @@ export function updateElos(eloA, eloB, aWins) {
 
 
 /**
- * Map Elo to a 1.0–10.0 score in 0.1 increments, scaled for a normal
- * distribution: 1500 → 5.5 (midpoint), ±150 Elo ≈ ±1.0 score point.
- * 68 % of a typical library lands in 4.5–6.5, extremes reach 1 or 10.
+ * Map an Elo value to a 1.0–10.0 display score relative to the collection.
+ * Pass the min and max Elo of the ranked set so #1 always = 10 and last = 1.
+ * With a single movie (minElo === maxElo) it returns 10.
  */
-export function eloToScore(elo) {
-  const raw = 5.5 + (elo - BASE_ELO) / 150
-  return Math.max(1.0, Math.min(10.0, Math.round(raw * 10) / 10))
+export function eloToScore(elo, minElo, maxElo) {
+  if (minElo === maxElo) return 10.0
+  const raw = 1 + 9 * (elo - minElo) / (maxElo - minElo)
+  return Math.round(raw * 10) / 10
 }
