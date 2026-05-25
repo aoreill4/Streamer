@@ -132,6 +132,8 @@ export default function ReelsPage() {
   useEffect(() => {
     const liked = user?.likedMovies || []
     const watchlisted = user?.watchlist || []
+    // Pre-seed seen IDs so liked movies never appear in the feed
+    liked.forEach(m => seenIdsRef.current.add(m.id))
     // Merge, deduplicate, prefer liked (they have stronger signal)
     const seen = new Set()
     const all = []
