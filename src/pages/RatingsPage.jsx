@@ -88,7 +88,7 @@ export default function RatingsPage() {
         {all.length === 0 && (
           <div className="text-center py-24 text-gray-500">
             <p className="text-lg">No rated movies yet.</p>
-            <p className="text-sm mt-2">Like movies to start building your rankings.</p>
+            <p className="text-sm mt-2">Mark movies as watched to start building your rankings.</p>
             <Link to="/" className="mt-4 inline-block text-[#E50914] text-sm hover:underline">
               Browse movies →
             </Link>

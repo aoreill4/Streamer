@@ -90,7 +90,7 @@ function runtime(minutes) {
 export default function DetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, isInWatchlist, addToWatchlist, removeFromWatchlist, isLiked, likeMovie, unlikeMovie, ratedMovies } = useAuth()
+  const { user, isInWatchlist, addToWatchlist, removeFromWatchlist, isWatched, watchMovie, unwatchMovie, ratedMovies } = useAuth()
 
   const [movie, setMovie] = useState(null)
   const [providers, setProviders] = useState([])
@@ -260,7 +260,7 @@ export default function DetailPage() {
                 )}
                 {user && movie && (() => {
                   const saved = isInWatchlist(movie.id)
-                  const liked = isLiked(movie.id)
+                  const watched = isWatched(movie.id)
                   return (
                     <>
                       <button
@@ -278,21 +278,21 @@ export default function DetailPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (liked) { unlikeMovie(movie.id) } else {
-                            likeMovie(movie)
+                          if (watched) { unwatchMovie(movie.id) } else {
+                            watchMovie(movie)
                             if (Object.keys(ratedMovies).length >= 1) setComparingMovie(movie)
                           }
                         }}
                         className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors duration-200 ${
-                          liked
+                          watched
                             ? 'bg-[#E50914]/20 text-[#E50914] hover:bg-[#E50914]/30'
                             : 'bg-white/10 hover:bg-white/20 text-white'
                         }`}
                       >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={watched ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
                         </svg>
-                        {liked ? 'Liked' : 'Like'}
+                        {watched ? 'Watched' : 'Mark Watched'}
                       </button>
                     </>
                   )

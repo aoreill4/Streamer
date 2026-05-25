@@ -143,12 +143,12 @@ export function clusterGenres(cluster, limit = 3) {
  * Given the user's liked movies, return an array of "taste clusters",
  * each with { keywordIds, genreIds } ready to pass to discoverMovies.
  */
-export function buildTasteClusters(likedMovies) {
-  if (!likedMovies?.length) return []
+export function buildTasteClusters(watchedMovies) {
+  if (!watchedMovies?.length) return []
 
   // Choose k: 1 cluster up to 4, roughly 1 per 3 liked movies
-  const k = Math.min(4, Math.max(1, Math.floor(likedMovies.length / 3)))
-  const clusters = kMeans(likedMovies, k)
+  const k = Math.min(4, Math.max(1, Math.floor(watchedMovies.length / 3)))
+  const clusters = kMeans(watchedMovies, k)
 
   return clusters.map(cluster => ({
     keywordIds: clusterKeywords(cluster),

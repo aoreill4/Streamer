@@ -33,9 +33,14 @@ function persistUser(updated) {
 function getUserById(id) {
   const u = getUsers().find(u => u.id === id) || null
   if (!u) return null
+  // Migrate legacy field name
+  if (u.likedMovies && !u.watchedMovies) {
+    u.watchedMovies = u.likedMovies
+    delete u.likedMovies
+  }
   return {
     watchlist: [],
-    likedMovies: [],
+    watchedMovies: [],
     streamingServices: [],
     hasVPN: false,
     country: '',
@@ -61,7 +66,7 @@ async function enrichWithKeywords(movieId, setUser) {
         list.map(m => m.id === movieId ? { ...m, keyword_ids } : m)
       const updated = {
         ...prev,
-        likedMovies: patchList(prev.likedMovies || []),
+        watchedMovies: patchList(prev.watchedMovies || []),
         watchlist: patchList(prev.watchlist || []),
       }
       persistUser(updated)
@@ -106,7 +111,7 @@ export function AuthProvider({ children }) {
       hasVPN: false,
       country: '',
       watchlist: [],
-      likedMovies: [],
+      watchedMovies: [],
       ratedMovies: {},
     }
     saveUsers([...users, newUser])
@@ -166,11 +171,11 @@ export function AuthProvider({ children }) {
     return !!(user?.watchlist || []).find(m => m.id === movieId)
   }, [user])
 
-  const likeMovie = useCallback((movie) => {
+  const watchMovie = useCallback((movie) => {
     setUser(prev => {
       if (!prev) return prev
-      const likedMovies = prev.likedMovies || []
-      if (likedMovies.find(m => m.id === movie.id)) return prev
+      const watchedMovies = prev.watchedMovies || []
+      if (watchedMovies.find(m => m.id === movie.id)) return prev
       const entry = {
         id: movie.id,
         title: movie.title,
@@ -191,7 +196,7 @@ export function AuthProvider({ children }) {
       }
       const updated = {
         ...prev,
-        likedMovies: [...likedMovies, entry],
+        watchedMovies: [...watchedMovies, entry],
         ratedMovies: { ...ratedMovies, [movie.id]: ratedEntry },
       }
       persistUser(updated)
@@ -215,17 +220,17 @@ export function AuthProvider({ children }) {
     })
   }, [])
 
-  const unlikeMovie = useCallback((movieId) => {
+  const unwatchMovie = useCallback((movieId) => {
     setUser(prev => {
       if (!prev) return prev
-      const updated = { ...prev, likedMovies: (prev.likedMovies || []).filter(m => m.id !== movieId) }
+      const updated = { ...prev, watchedMovies: (prev.watchedMovies || []).filter(m => m.id !== movieId) }
       persistUser(updated)
       return updated
     })
   }, [])
 
-  const isLiked = useCallback((movieId) => {
-    return !!(user?.likedMovies || []).find(m => m.id === movieId)
+  const isWatched = useCallback((movieId) => {
+    return !!(user?.watchedMovies || []).find(m => m.id === movieId)
   }, [user])
 
   return (
@@ -238,9 +243,9 @@ export function AuthProvider({ children }) {
       addToWatchlist,
       removeFromWatchlist,
       isInWatchlist,
-      likeMovie,
-      unlikeMovie,
-      isLiked,
+      watchMovie,
+      unwatchMovie,
+      isWatched,
       recordComparison,
       ratedMovies: user?.ratedMovies ?? {},
     }}>

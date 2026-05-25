@@ -63,19 +63,19 @@ function RecommendationsSection() {
 
   useEffect(() => {
     if (!user) return
-    if (!user.likedMovies || user.likedMovies.length === 0) {
+    if (!user.watchedMovies || user.watchedMovies.length === 0) {
       setLoading(false)
       return
     }
 
     async function fetchRecs() {
-      const recent = user.likedMovies.slice(-5)
+      const recent = user.watchedMovies.slice(-5)
       const results = await Promise.allSettled(
         recent.map(m => getMovieRecommendations(m.id))
       )
 
       const watchlistIds = new Set((user.watchlist || []).map(m => m.id))
-      const likedIds = new Set((user.likedMovies || []).map(m => m.id))
+      const watchedIds = new Set((user.watchedMovies || []).map(m => m.id))
 
       const seen = new Set()
       const flat = []
@@ -85,7 +85,7 @@ function RecommendationsSection() {
           if (seen.has(movie.id)) continue
           seen.add(movie.id)
           if (watchlistIds.has(movie.id)) continue
-          if (likedIds.has(movie.id)) continue
+          if (watchedIds.has(movie.id)) continue
           flat.push(movie)
         }
       }
@@ -103,23 +103,23 @@ function RecommendationsSection() {
     fetchRecs()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const noLikes = !user?.likedMovies || user.likedMovies.length === 0
+  const noWatched = !user?.likedMovies || user.watchedMovies.length === 0
 
   return (
     <section className="mb-10">
       <h2 className="text-white text-lg font-semibold mb-4">Recommended for you</h2>
-      {loading && !noLikes && (
+      {loading && !noWatched && (
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-4 border-gray-700 border-t-[#E50914] rounded-full animate-spin" />
         </div>
       )}
-      {noLikes && (
+      {noWatched && (
         <p className="text-gray-500 text-sm py-6">
-          Like movies in Reels to get personalized recommendations ♥
+          Mark movies as Watched to get personalized recommendations
         </p>
       )}
-      {!loading && !noLikes && recs.length === 0 && (
-        <p className="text-gray-500 text-sm py-6">No recommendations found yet. Like more movies!</p>
+      {!loading && !noWatched && recs.length === 0 && (
+        <p className="text-gray-500 text-sm py-6">No recommendations found yet. Mark more movies as watched!</p>
       )}
       {!loading && recs.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
@@ -194,7 +194,7 @@ function RankingsSection() {
 
       {ranked.length === 0 && (
         <p className="text-gray-500 text-sm py-4">
-          Like movies to start ranking them. After liking your second movie you'll be asked to compare them.
+          Mark movies as watched to start ranking them. After your second watched movie you'll be asked to compare them.
         </p>
       )}
 
@@ -234,7 +234,7 @@ function RankingsSection() {
 
       {unranked.length > 0 && ranked.length > 0 && (
         <p className="text-gray-600 text-xs mt-3">
-          {unranked.length} liked {unranked.length === 1 ? 'movie' : 'movies'} not yet compared — hit "Compare movies" to rank them.
+          {unranked.length} watched {unranked.length === 1 ? 'movie' : 'movies'} not yet compared — hit "Compare movies" to rank them.
         </p>
       )}
     </section>
