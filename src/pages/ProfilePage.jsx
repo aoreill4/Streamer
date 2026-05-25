@@ -74,12 +74,27 @@ function RecommendationsSection() {
       const watchedIds = new Set((user.watchedMovies || []).map(m => m.id))
 
       // Build a diverse pool of source movies:
-      // top-rated (by elo), most recent watched, and watchlist items — up to 2 each
+      // top-rated (by elo, score ≥ 5), most recent watched (score ≥ 5 or unrated), and watchlist items — up to 2 each
       const rated = Object.values(user.ratedMovies || {})
         .filter(m => m.comparisons > 0)
         .sort((a, b) => b.elo - a.elo)
-      const topRated = rated.slice(0, 2)
-      const recentWatched = [...user.watchedMovies].reverse().slice(0, 2)
+      const ratedMaxElo = rated[0]?.elo ?? BASE_ELO
+      const ratedMinElo = rated[rated.length - 1]?.elo ?? BASE_ELO
+      const ratedIds = new Set(rated.map(m => m.id))
+
+      const highRated = rated.filter(m => eloToScore(m.elo, ratedMinElo, ratedMaxElo) >= 5.0)
+      const topRated = highRated.slice(0, 2)
+
+      // Only use recently watched movies that score ≥ 5 (or haven't been compared yet)
+      const recentWatched = [...user.watchedMovies]
+        .reverse()
+        .filter(m => {
+          if (!ratedIds.has(m.id)) return true
+          const rm = user.ratedMovies[m.id]
+          if (!rm || !rm.comparisons) return true
+          return eloToScore(rm.elo, ratedMinElo, ratedMaxElo) >= 5.0
+        })
+        .slice(0, 2)
       const watchlistSample = (user.watchlist || []).slice(0, 2)
 
       const seen = new Set()
