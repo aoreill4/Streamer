@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getMovieRecommendations, getWatchProvidersList, getWatchRegions, IMG_BASE } from '../lib/tmdb.js'
-import { eloToStars } from '../lib/elo.js'
+import { eloToScore } from '../lib/elo.js'
 import { deduplicateProviders, isProviderSelected, toggleProvider as toggleProviderGroup } from '../lib/providers.js'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 import MovieCard from '../components/MovieCard.jsx'
@@ -132,17 +132,15 @@ function RecommendationsSection() {
 }
 
 // ── Rankings section ───────────────────────────────────────────────────────
-function StarsDisplay({ stars }) {
-  const full = Math.floor(stars)
-  const half = (stars % 1) >= 0.5
+function ScoreDisplay({ score }) {
+  const pct = ((score - 1) / 9) * 100
   return (
-    <span className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }, (_, i) => (
-        <svg key={i} className={`w-3 h-3 ${i < full || (i === full && half) ? 'text-[#E50914]' : 'text-gray-700'}`} viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-      ))}
-      <span className="text-gray-500 text-xs ml-1">{stars.toFixed(1)}</span>
+    <span className="flex items-center gap-2">
+      <span className="text-[#E50914] text-sm font-bold tabular-nums">{score.toFixed(1)}</span>
+      <span className="flex-1 max-w-[64px] h-1 bg-white/8 rounded-full overflow-hidden">
+        <span className="block h-full bg-[#E50914] rounded-full" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="text-gray-700 text-[10px]">/10</span>
     </span>
   )
 }
@@ -223,7 +221,7 @@ function RankingsSection() {
                 <p className="text-white text-sm font-semibold leading-tight group-hover:text-[#E50914] transition-colors line-clamp-1">
                   {m.title}
                 </p>
-                <StarsDisplay stars={eloToStars(m.elo)} />
+                <ScoreDisplay score={eloToScore(m.elo)} />
               </div>
               <span className="text-gray-700 text-xs flex-shrink-0">
                 {m.comparisons} {m.comparisons === 1 ? 'match' : 'matches'}

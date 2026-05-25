@@ -1,30 +1,31 @@
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { eloToStars } from '../lib/elo.js'
+import { eloToScore } from '../lib/elo.js'
 import ComparisonModal from '../components/ComparisonModal.jsx'
 import { IMG_BASE } from '../lib/tmdb.js'
 
+// Tiers on the 1–10 scale
 const TIERS = [
-  { label: 'S', min: 4.5, color: '#E50914',   bg: 'rgba(229,9,20,.12)' },
-  { label: 'A', min: 3.5, color: '#f97316',   bg: 'rgba(249,115,22,.1)' },
-  { label: 'B', min: 2.5, color: '#eab308',   bg: 'rgba(234,179,8,.1)'  },
-  { label: 'C', min: 1.5, color: '#6b7280',   bg: 'rgba(107,114,128,.1)'},
-  { label: 'D', min: 0,   color: '#374151',   bg: 'rgba(55,65,81,.1)'   },
+  { label: 'S', min: 8.5, color: '#E50914',   bg: 'rgba(229,9,20,.12)' },
+  { label: 'A', min: 7.0, color: '#f97316',   bg: 'rgba(249,115,22,.1)' },
+  { label: 'B', min: 5.5, color: '#eab308',   bg: 'rgba(234,179,8,.1)'  },
+  { label: 'C', min: 4.0, color: '#6b7280',   bg: 'rgba(107,114,128,.1)'},
+  { label: 'D', min: 1.0, color: '#374151',   bg: 'rgba(55,65,81,.1)'   },
 ]
 
-function getTier(stars) {
-  return TIERS.find(t => stars >= t.min) ?? TIERS[TIERS.length - 1]
+function getTier(score) {
+  return TIERS.find(t => score >= t.min) ?? TIERS[TIERS.length - 1]
 }
 
-function StarBar({ stars }) {
-  const pct = ((stars - 0.5) / 4.5) * 100
+function ScoreBar({ score }) {
+  const pct = ((score - 1) / 9) * 100
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1 bg-white/8 rounded-full overflow-hidden">
         <div className="h-full bg-[#E50914] rounded-full transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-gray-400 text-xs font-medium w-6 text-right">{stars.toFixed(1)}</span>
+      <span className="text-gray-400 text-xs font-medium w-8 text-right">{score.toFixed(1)}</span>
     </div>
   )
 }
@@ -50,9 +51,9 @@ export default function RatingsPage() {
   const tierGroups = TIERS.map(tier => ({
     ...tier,
     movies: ranked.filter(m => {
-      const stars = eloToStars(m.elo)
+      const score = eloToScore(m.elo)
       const nextTier = TIERS[TIERS.indexOf(tier) - 1]
-      return stars >= tier.min && (!nextTier || stars < nextTier.min)
+      return score >= tier.min && (!nextTier || score < nextTier.min)
     }),
   })).filter(t => t.movies.length > 0)
 
@@ -116,8 +117,8 @@ export default function RatingsPage() {
             {view === 'ranked' && (
               <div className="flex flex-col gap-2">
                 {ranked.map((m, i) => {
-                  const stars = eloToStars(m.elo)
-                  const tier = getTier(stars)
+                  const score = eloToScore(m.elo)
+                  const tier = getTier(score)
                   return (
                     <Link
                       key={m.id}
@@ -145,7 +146,7 @@ export default function RatingsPage() {
                         <p className="text-white text-sm font-semibold leading-tight line-clamp-1 group-hover:text-[#E50914] transition-colors">
                           {m.title}
                         </p>
-                        <StarBar stars={stars} />
+                        <ScoreBar score={score} />
                       </div>
 
                       {/* Tier badge */}
@@ -176,7 +177,8 @@ export default function RatingsPage() {
                       </span>
                       <div className="w-px h-4 bg-white/10" />
                       <span className="text-gray-500 text-xs">
-                        {tier.min.toFixed(1)}★ and {tier.label === 'D' ? 'below' : 'above'}
+                        {tier.min.toFixed(1)}
+                        {tier.label === 'D' ? ' and below' : '+'}
                       </span>
                     </div>
 
@@ -187,7 +189,7 @@ export default function RatingsPage() {
                           key={m.id}
                           to={`/movie/${m.id}`}
                           className="group relative"
-                          title={m.title}
+                          title={`${m.title} — ${eloToScore(m.elo).toFixed(1)}`}
                         >
                           {m.poster_path ? (
                             <img
@@ -200,6 +202,9 @@ export default function RatingsPage() {
                               <span className="text-gray-600 text-[9px] text-center leading-tight">{m.title}</span>
                             </div>
                           )}
+                          <div className="absolute bottom-1 right-1 bg-black/70 rounded text-[8px] font-bold text-white px-1">
+                            {eloToScore(m.elo).toFixed(1)}
+                          </div>
                         </Link>
                       ))}
                     </div>

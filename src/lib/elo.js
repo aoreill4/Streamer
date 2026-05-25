@@ -11,9 +11,12 @@ export function updateElos(eloA, eloB, aWins) {
 }
 
 
-/** Map Elo to a 0.5–5.0 star display value (1 decimal place). */
-export function eloToStars(elo) {
-  // 1000 → 0.5★  1500 → 3.0★  2000 → 5.0★
-  const raw = 0.5 + (elo - 1000) / 333
-  return Math.max(0.5, Math.min(5.0, Math.round(raw * 2) / 2))
+/**
+ * Map Elo to a 1.0–10.0 score in 0.1 increments, scaled for a normal
+ * distribution: 1500 → 5.5 (midpoint), ±150 Elo ≈ ±1.0 score point.
+ * 68 % of a typical library lands in 4.5–6.5, extremes reach 1 or 10.
+ */
+export function eloToScore(elo) {
+  const raw = 5.5 + (elo - BASE_ELO) / 150
+  return Math.max(1.0, Math.min(10.0, Math.round(raw * 10) / 10))
 }
