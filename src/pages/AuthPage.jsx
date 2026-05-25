@@ -180,6 +180,7 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
   const navigate = useNavigate()
   const [providers, setProviders] = useState([])
   const [selected, setSelected] = useState([])
+  const [providerSearch, setProviderSearch] = useState('')
   const [hasVPN, setHasVPN] = useState(false)
   const [country, setCountry] = useState('')
   const [regions, setRegions] = useState([])
@@ -227,41 +228,75 @@ function SignupStep2({ credentials, onSwitchToLogin }) {
   return (
     <form onSubmit={handleFinish} className="flex flex-col gap-5">
       <div>
-        <p className="text-white text-sm font-semibold mb-3">Which services do you subscribe to?</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-white text-sm font-semibold">Which services do you subscribe to?</p>
+          {selected.length > 0 && (
+            <span className="text-xs text-[#E50914] font-medium">{selected.length} selected</span>
+          )}
+        </div>
         {providers.length === 0 ? (
           <div className="flex justify-center py-6">
             <div className="w-6 h-6 border-2 border-gray-600 border-t-[#E50914] rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
-            {providers.map(p => (
-              <button
-                key={p.provider_id}
-                type="button"
-                onClick={() => toggleProvider(p.provider_id)}
-                className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all duration-150 ${
-                  selected.includes(p.provider_id)
-                    ? 'border-[#E50914] bg-[#E50914]/10'
-                    : 'border-white/5 bg-[#2a2a2a] hover:border-white/20'
-                }`}
-              >
-                {p.logo_path ? (
-                  <img
-                    src={`${IMG_BASE}/w92${p.logo_path}`}
-                    alt={p.provider_name}
-                    className="w-10 h-10 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-[#3a3a3a] flex items-center justify-center">
-                    <span className="text-gray-400 text-xs">?</span>
-                  </div>
-                )}
-                <span className="text-gray-300 text-[10px] text-center leading-tight line-clamp-2">
-                  {p.provider_name}
-                </span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="relative mb-2">
+              <span className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-gray-500">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={providerSearch}
+                onChange={e => setProviderSearch(e.target.value)}
+                placeholder="Search services…"
+                className="w-full bg-[#2a2a2a] text-white placeholder-gray-600 rounded-lg pl-7 pr-3 py-1.5 text-xs outline-none border border-white/8 focus:border-[#E50914] transition-colors"
+              />
+              {providerSearch && (
+                <button type="button" onClick={() => setProviderSearch('')} className="absolute inset-y-0 right-2 text-gray-500 hover:text-gray-300 text-xs">✕</button>
+              )}
+            </div>
+            {(() => {
+              const q = providerSearch.toLowerCase().trim()
+              const filtered = providers.filter(p => !q || p.provider_name.toLowerCase().includes(q))
+              const sorted = [...filtered].sort((a, b) => {
+                if (q) {
+                  const aOn = selected.includes(a.provider_id)
+                  const bOn = selected.includes(b.provider_id)
+                  if (aOn !== bOn) return aOn ? -1 : 1
+                }
+                return (a.display_priority ?? 999) - (b.display_priority ?? 999)
+              })
+              return sorted.length === 0 ? (
+                <p className="text-gray-600 text-xs text-center py-4">No services match "{providerSearch}"</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
+                  {sorted.map(p => (
+                    <button
+                      key={p.provider_id}
+                      type="button"
+                      onClick={() => toggleProvider(p.provider_id)}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all duration-150 ${
+                        selected.includes(p.provider_id)
+                          ? 'border-[#E50914] bg-[#E50914]/10'
+                          : 'border-white/5 bg-[#2a2a2a] hover:border-white/20'
+                      }`}
+                    >
+                      {p.logo_path ? (
+                        <img src={`${IMG_BASE}/w92${p.logo_path}`} alt={p.provider_name} className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-[#3a3a3a] flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">?</span>
+                        </div>
+                      )}
+                      <span className="text-gray-300 text-[10px] text-center leading-tight line-clamp-2">{p.provider_name}</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+          </>
         )}
       </div>
 

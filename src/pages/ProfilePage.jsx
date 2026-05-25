@@ -290,6 +290,7 @@ function SettingsSection() {
   const { user, updateUser } = useAuth()
   const [providers, setProviders] = useState([])
   const [selectedServices, setSelectedServices] = useState(user?.streamingServices || [])
+  const [providerSearch, setProviderSearch] = useState('')
   const [hasVPN, setHasVPN] = useState(user?.hasVPN || false)
   const [country, setCountry] = useState(user?.country || '')
   const [regions, setRegions] = useState([])
@@ -379,26 +380,66 @@ function SettingsSection() {
 
       {/* Streaming services */}
       <div className="bg-[#1f1f1f] rounded-xl p-5 mb-4">
-        <p className="text-gray-400 text-xs font-medium mb-3 uppercase tracking-wider">Streaming Services</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Streaming Services</p>
+          {selectedServices.length > 0 && (
+            <span className="text-xs text-[#E50914] font-medium">{selectedServices.length} selected</span>
+          )}
+        </div>
         {providers.length === 0 ? (
           <div className="flex justify-center py-6">
             <div className="w-6 h-6 border-2 border-gray-600 border-t-[#E50914] rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4 max-h-72 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
-            {providers.map(p => (
-              <ProviderSelectCard
-                key={p.provider_id}
-                provider={p}
-                selected={selectedServices.includes(p.provider_id)}
-                onToggle={toggleService}
+          <>
+            <div className="relative mb-3">
+              <span className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-gray-500">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={providerSearch}
+                onChange={e => setProviderSearch(e.target.value)}
+                placeholder="Search services…"
+                className="w-full bg-[#2a2a2a] text-white placeholder-gray-600 rounded-lg pl-7 pr-7 py-1.5 text-xs outline-none border border-white/8 focus:border-[#E50914] transition-colors"
               />
-            ))}
-          </div>
+              {providerSearch && (
+                <button type="button" onClick={() => setProviderSearch('')} className="absolute inset-y-0 right-2 text-gray-500 hover:text-gray-300 text-xs">✕</button>
+              )}
+            </div>
+            {(() => {
+              const q = providerSearch.toLowerCase().trim()
+              const filtered = providers.filter(p => !q || p.provider_name.toLowerCase().includes(q))
+              const sorted = [...filtered].sort((a, b) => {
+                if (q) {
+                  const aOn = selectedServices.includes(a.provider_id)
+                  const bOn = selectedServices.includes(b.provider_id)
+                  if (aOn !== bOn) return aOn ? -1 : 1
+                }
+                return (a.display_priority ?? 999) - (b.display_priority ?? 999)
+              })
+              return sorted.length === 0 ? (
+                <p className="text-gray-600 text-xs text-center py-4">No services match "{providerSearch}"</p>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4 max-h-64 overflow-y-auto pr-1" style={{scrollbarWidth:'thin'}}>
+                  {sorted.map(p => (
+                    <ProviderSelectCard
+                      key={p.provider_id}
+                      provider={p}
+                      selected={selectedServices.includes(p.provider_id)}
+                      onToggle={toggleService}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
+          </>
         )}
         <button
           onClick={saveServices}
-          className="bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors"
+          className="bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors mt-1"
         >
           {servicesSaved ? 'Saved ✓' : 'Save'}
         </button>
