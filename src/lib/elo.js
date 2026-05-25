@@ -10,25 +10,6 @@ export function updateElos(eloA, eloB, aWins) {
   }
 }
 
-/**
- * Pick the best opponent for a comparison.
- * Strategy: fewest comparisons first (most uncertainty to resolve),
- * then closest Elo to targetElo (most informative match).
- * excludeIds = set of movie IDs already used in this comparison session.
- */
-export function pickOpponent(ratedMovies, excludeId, targetElo = BASE_ELO, excludeIds = new Set()) {
-  const candidates = Object.values(ratedMovies).filter(
-    m => m.id !== excludeId && !excludeIds.has(m.id)
-  )
-  if (!candidates.length) return null
-
-  candidates.sort((a, b) => {
-    const compDiff = (a.comparisons || 0) - (b.comparisons || 0)
-    if (compDiff !== 0) return compDiff
-    return Math.abs(a.elo - targetElo) - Math.abs(b.elo - targetElo)
-  })
-  return candidates[0]
-}
 
 /** Map Elo to a 0.5–5.0 star display value (1 decimal place). */
 export function eloToStars(elo) {

@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { BASE_ELO, updateElos, pickOpponent } from '../lib/elo.js'
 import { IMG_BASE } from '../lib/tmdb.js'
 
-const MAX_ROUNDS = 3
+// Binary search insertion: ceil(log2(N+1)) comparisons to place a movie
+// among N already-ranked movies. Freezes sorted list at mount so mid-session
+// Elo updates don't shift the search space.
 
 function MovieChoice({ movie, state, onClick }) {
   return (
@@ -44,50 +45,63 @@ function MovieChoice({ movie, state, onClick }) {
 export default function ComparisonModal({ newMovie, onClose }) {
   const { ratedMovies, recordComparison } = useAuth()
 
-  const [round, setRound] = useState(0)
-  const [localElo, setLocalElo] = useState(ratedMovies[newMovie.id]?.elo ?? BASE_ELO)
-  const [usedIds, setUsedIds] = useState(new Set())
-  const [opponent, setOpponent] = useState(() =>
-    pickOpponent(ratedMovies, newMovie.id, BASE_ELO, new Set())
+  // Freeze sorted ranked list at mount — binary search must not shift mid-session
+  const rankedRef = useRef(
+    Object.values(ratedMovies)
+      .filter(m => m.id !== newMovie.id && (m.comparisons || 0) > 0)
+      .sort((a, b) => b.elo - a.elo)
   )
+  const ranked = rankedRef.current
+  const total = ranked.length
+
+  // Binary search bounds: new movie belongs at index in [lo, hi)
+  const [lo, setLo] = useState(0)
+  const [hi, setHi] = useState(total)
   const [chosenId, setChosenId] = useState(null)
+
+  if (total === 0) { onClose(); return null }
+
+  const midIdx = Math.floor((lo + hi) / 2)
+  const opponent = ranked[midIdx]
+
+  // How many comparisons remain: ceil(log2(range))
+  const rangeSize = hi - lo
+  const stepsLeft = rangeSize > 1 ? Math.ceil(Math.log2(rangeSize)) : 1
+  const totalSteps = Math.ceil(Math.log2(total + 1))
+  const stepsDone = totalSteps - stepsLeft
+  const progress = Math.max(0, Math.min(1, stepsDone / totalSteps))
 
   const handlePick = useCallback(async (pickedId) => {
     if (chosenId !== null) return
     setChosenId(pickedId)
 
-    const aWins = pickedId === newMovie.id
-    const { newEloA } = updateElos(localElo, opponent.elo, aWins)
+    const newMovieWon = pickedId === newMovie.id
     recordComparison(
-      aWins ? newMovie.id : opponent.id,
-      aWins ? opponent.id : newMovie.id,
+      newMovieWon ? newMovie.id : opponent.id,
+      newMovieWon ? opponent.id : newMovie.id,
     )
-    const nextLocalElo = aWins ? newEloA : localElo - (newEloA - localElo)
 
     await new Promise(r => setTimeout(r, 420))
 
-    const nextRound = round + 1
-    if (nextRound >= MAX_ROUNDS) { onClose(); return }
+    // Binary search: win → search upper half (better than mid), lose → lower half
+    const newLo = newMovieWon ? lo : midIdx + 1
+    const newHi = newMovieWon ? midIdx : hi
 
-    const nextUsed = new Set([...usedIds, opponent.id])
-    const nextOpponent = pickOpponent(ratedMovies, newMovie.id, nextLocalElo, nextUsed)
-    if (!nextOpponent) { onClose(); return }
+    if (newLo >= newHi) {
+      onClose()
+      return
+    }
 
-    setRound(nextRound)
-    setLocalElo(nextLocalElo)
-    setUsedIds(nextUsed)
-    setOpponent(nextOpponent)
+    setLo(newLo)
+    setHi(newHi)
     setChosenId(null)
-  }, [chosenId, localElo, newMovie, opponent, round, usedIds, ratedMovies, recordComparison, onClose])
-
-  if (!opponent) return null
+  }, [chosenId, lo, hi, midIdx, newMovie, opponent, recordComparison, onClose])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      {/* Card */}
       <div
         className="bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-white/8"
         style={{ animation: 'compPop .28s cubic-bezier(.175,.885,.32,1.275) both' }}
@@ -95,24 +109,38 @@ export default function ComparisonModal({ newMovie, onClose }) {
         <style>{`@keyframes compPop { from { transform: scale(.88) translateY(16px); opacity:0 } to { transform: scale(1) translateY(0); opacity:1 } }`}</style>
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <div className="flex gap-1">
-            {Array.from({ length: MAX_ROUNDS }, (_, i) => (
-              <div
-                key={i}
-                className={`h-1 rounded-full transition-all duration-300 ${
-                  i < round ? 'bg-[#E50914] w-6' : i === round ? 'bg-white w-6' : 'bg-white/15 w-6'
-                }`}
-              />
-            ))}
+        <div className="flex items-center justify-between px-5 pt-5 pb-2">
+          <div className="text-left">
+            <p className="text-white font-bold text-sm">Which did you prefer?</p>
+            <p className="text-gray-600 text-[10px] mt-0.5">
+              {rangeSize <= 2
+                ? 'Almost there — one more to place it'
+                : `Narrowing from ${total} movie${total !== 1 ? 's' : ''} · ~${stepsLeft} left`}
+            </p>
           </div>
-          <span className="text-white font-bold text-sm">Which did you prefer?</span>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 text-xs transition-colors"
+            className="text-gray-500 hover:text-gray-300 text-xs transition-colors ml-4 flex-shrink-0"
           >
             Skip
           </button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="px-5 pb-3">
+          <div className="h-1 bg-white/8 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#E50914] rounded-full transition-all duration-500"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1">
+            <span className="text-gray-700 text-[9px]">#{lo + 1}</span>
+            <span className="text-gray-500 text-[9px]">
+              {lo + 1 === hi ? `Placing at #${lo + 1}` : `Could be #${lo + 1}–#${hi} of ${total}`}
+            </span>
+            <span className="text-gray-700 text-[9px]">#{hi}</span>
+          </div>
         </div>
 
         {/* Movie choices */}
@@ -122,11 +150,9 @@ export default function ComparisonModal({ newMovie, onClose }) {
             state={chosenId === null ? 'idle' : chosenId === newMovie.id ? 'winner' : 'loser'}
             onClick={() => handlePick(newMovie.id)}
           />
-
           <div className="flex items-center flex-shrink-0">
             <span className="text-gray-700 text-[10px] font-black tracking-widest">VS</span>
           </div>
-
           <MovieChoice
             movie={opponent}
             state={chosenId === null ? 'idle' : chosenId === opponent.id ? 'winner' : 'loser'}
@@ -135,7 +161,7 @@ export default function ComparisonModal({ newMovie, onClose }) {
         </div>
 
         <p className="text-center text-gray-600 text-[10px] py-3">
-          Tap a movie to choose · shapes your personal rankings
+          Tap to choose · answers shape your personal rankings
         </p>
       </div>
     </div>
