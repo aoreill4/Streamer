@@ -29,7 +29,9 @@ function ReelCard({ reel, iframeRef, mounted, onMovieClick, onLiked }) {
     fn()
   }
 
-  const src = `https://www.youtube.com/embed/${trailerKey}?enablejsapi=1&autoplay=0&mute=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${trailerKey}&playsinline=1`
+  // autoplay=1 + mute=1 lets YouTube start buffering as soon as the iframe mounts.
+  // The play/pause postMessage commands handle actual playback control.
+  const src = `https://www.youtube.com/embed/${trailerKey}?enablejsapi=1&autoplay=1&mute=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${trailerKey}&playsinline=1`
 
   return (
     <div className="snap-start h-screen w-full relative bg-black overflow-hidden flex-shrink-0">
@@ -227,7 +229,7 @@ export default function ReelsPage() {
 
   // Load more when within 5 reels of the end
   useEffect(() => {
-    if (reels.length > 0 && activeIndex >= reels.length - 5) {
+    if (reels.length > 0 && activeIndex >= reels.length - 8) {
       fetchReels(true)
     }
   }, [activeIndex, reels.length]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -351,7 +353,7 @@ export default function ReelsPage() {
               <ReelCard
                 reel={reel}
                 iframeRef={el => { iframeRefs.current[i] = el }}
-                mounted={Math.abs(i - activeIndex) <= 1}
+                mounted={Math.abs(i - activeIndex) <= 2}
                 onMovieClick={handleMovieClick}
                 onLiked={setComparingMovie}
               />
