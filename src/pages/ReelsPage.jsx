@@ -279,6 +279,13 @@ export default function ReelsPage() {
         ytCmd(el, 'mute')
       }
     })
+    // Retry unmute after a short delay: the player may not have been ready
+    // to receive the command above (especially for freshly mounted iframes).
+    const t = setTimeout(() => {
+      const el = iframeRefs.current[activeIndex]
+      if (el) ytCmd(el, mutedRef.current ? 'mute' : 'unMute')
+    }, 600)
+    return () => clearTimeout(t)
   }, [activeIndex]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mute toggle
@@ -365,7 +372,7 @@ export default function ReelsPage() {
               <ReelCard
                 reel={reel}
                 iframeRef={el => { iframeRefs.current[i] = el }}
-                mounted={Math.abs(i - activeIndex) <= 2}
+                mounted={Math.abs(i - activeIndex) <= 3}
                 onMovieClick={handleMovieClick}
                 onLiked={setComparingMovie}
               />
