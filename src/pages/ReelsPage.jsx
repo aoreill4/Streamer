@@ -234,20 +234,32 @@ export default function ReelsPage() {
     }
   }, [activeIndex, reels.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // YouTube onReady
+  // YouTube event bridge: onReady → start playback; onStateChange(playing) → unmute active
   useEffect(() => {
     function onMessage(e) {
       try {
         const data = JSON.parse(typeof e.data === 'string' ? e.data : '{}')
-        if (data.event !== 'onReady') return
-        Object.entries(iframeRefs.current).forEach(([idxStr, el]) => {
-          if (!el || el.contentWindow !== e.source) return
-          const i = parseInt(idxStr)
+        if (data.event !== 'onReady' && data.event !== 'onStateChange') return
+
+        const entry = Object.entries(iframeRefs.current).find(
+          ([, el]) => el?.contentWindow === e.source
+        )
+        if (!entry) return
+        const i = parseInt(entry[0])
+        const el = entry[1]
+
+        if (data.event === 'onReady') {
+          // Kick off playback; unmute happens once the player reports "playing"
+          if (i === activeIndexRef.current) ytCmd(el, 'playVideo')
+          else { ytCmd(el, 'pauseVideo'); ytCmd(el, 'mute') }
+        }
+
+        if (data.event === 'onStateChange' && data.info === 1) {
+          // Player just transitioned to playing — safe to unmute now
           if (i === activeIndexRef.current) {
-            ytCmd(el, 'playVideo')
             ytCmd(el, mutedRef.current ? 'mute' : 'unMute')
           }
-        })
+        }
       } catch {}
     }
     window.addEventListener('message', onMessage)
