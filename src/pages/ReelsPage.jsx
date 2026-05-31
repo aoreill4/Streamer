@@ -132,8 +132,15 @@ export default function ReelsPage() {
   useEffect(() => {
     const watched = user?.watchedMovies || []
     watched.forEach(m => seenIdsRef.current.add(m.id))
-    // Most-recently watched first — freshest taste signal
-    recoSourcesRef.current = [...watched].reverse().map(m => m.id)
+    // Shuffle so each session starts at a different source movie
+    const ids = [...watched].reverse().map(m => m.id)
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]]
+    }
+    recoSourcesRef.current = ids
+    // Start fallback at a random page so trending/discover feels fresh too
+    fetchPageRef.current = Math.floor(Math.random() * 5) + 1
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchReels = useCallback(async (append = false) => {
@@ -146,13 +153,33 @@ export default function ReelsPage() {
       const sources = recoSourcesRef.current
 
       if (sources.length > 0) {
-        // Cycle through watched movies round-robin, fetching TMDB recommendations
-        // for each — same engine as "Recommended for you" on the Profile page.
-        const sourceId = sources[recoIdxRef.current % sources.length]
-        recoIdxRef.current++
-        const page = recoPageRef.current.get(sourceId) || 1
-        recoPageRef.current.set(sourceId, page + 1)
-        movies = await getMovieRecommendations(sourceId, page).then(d => d.results || [])
+        // Pull from up to 3 sources simultaneously and interleave results
+        // round-robin so no single movie's genre cluster dominates the feed.
+        const batchCount = Math.min(3, sources.length)
+        const batchIds = []
+        for (let i = 0; i < batchCount; i++) {
+          batchIds.push(sources[(recoIdxRef.current + i) % sources.length])
+        }
+        recoIdxRef.current += batchCount
+
+        const batchResults = await Promise.allSettled(
+          batchIds.map(sourceId => {
+            const page = recoPageRef.current.get(sourceId) || 1
+            recoPageRef.current.set(sourceId, page + 1)
+            return getMovieRecommendations(sourceId, page)
+          })
+        )
+
+        // Interleave: take one from each source in turn so themes alternate
+        const perSource = batchResults.map(r =>
+          r.status === 'fulfilled' ? (r.value.results || []) : []
+        )
+        const maxLen = Math.max(...perSource.map(a => a.length), 0)
+        for (let i = 0; i < maxLen; i++) {
+          for (const arr of perSource) {
+            if (arr[i]) movies.push(arr[i])
+          }
+        }
       } else {
         // No watch history yet — fall back to service-filtered discovery or trending
         const providerIds = user?.streamingServices?.length ? user.streamingServices : null
